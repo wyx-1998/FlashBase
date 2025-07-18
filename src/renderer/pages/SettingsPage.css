@@ -1,0 +1,276 @@
+.settings-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.settings-loading {
+  text-align: center;
+  padding: 40px;
+  color: #7f8c8d;
+}
+
+.settings-header {
+  margin-bottom: 30px;
+}
+
+.settings-header h1 {
+  margin: 0 0 5px 0;
+  font-size: 24px;
+  color: #2c3e50;
+}
+
+.settings-header p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 16px;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.settings-container {
+  display: flex;
+  gap: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.settings-tabs {
+  min-width: 200px;
+  background: #f8f9fa;
+  border-right: 1px solid #e9ecef;
+}
+
+.tab-button {
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.tab-button:hover {
+  background: #e9ecef;
+}
+
+.tab-button.active {
+  background: #3498db;
+  color: white;
+}
+
+.tab-icon {
+  font-size: 16px;
+}
+
+.tab-label {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.settings-content {
+  flex: 1;
+  padding: 30px;
+}
+
+.tab-panel h2 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  color: #2c3e50;
+}
+
+.tab-panel p {
+  margin: 0 0 30px 0;
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 4px;
+  color: #95a5a6;
+  font-size: 12px;
+}
+
+.form-actions {
+  margin-top: 30px;
+}
+
+.test-button {
+  padding: 10px 20px;
+  background: #2ecc71;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.test-button:hover {
+  background: #27ae60;
+}
+
+.shortcut-list {
+  space-y: 16px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .shortcut-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .shortcut-item input {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.shortcut-info {
+  flex: 1;
+}
+
+.shortcut-info strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.shortcut-info small {
+  color: #7f8c8d;
+  font-size: 12px;
+}
+
+.shortcut-item input {
+  width: 160px;
+  max-width: 160px;
+  min-width: 120px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.checkbox-group {
+  space-y: 16px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.checkbox-label:hover {
+  background: #f8f9fa;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3498db;
+}
+
+.checkbox-label span {
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.settings-footer {
+  margin-top: 30px;
+  text-align: right;
+}
+
+.save-button {
+  padding: 12px 24px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.save-button:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
