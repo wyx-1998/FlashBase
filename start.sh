@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # FlashBase 快速启动脚本
-# 作者: 小伢儿 Team
+# 作者: 小伢儿
 # 版本: 1.0.0
 
 echo "🚀 启动 FlashBase 开发环境..."

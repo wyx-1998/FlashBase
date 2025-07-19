@@ -35,7 +35,7 @@ export const APP_INFO = {
   name: 'FlashBase',
   version: '1.0.0',
   description: 'FlashBase - 闪电般的知识库管理工具',
-  homepage: 'https://github.com/dia-team/flashbase-desktop'
+  homepage: 'https://github.com/wyx-1998/FlashBase'
 };
 
 // 窗口配置
