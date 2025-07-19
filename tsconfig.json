@@ -24,7 +24,9 @@
       "@main/*": ["src/main/*"],
       "@renderer/*": ["src/renderer/*"],
       "@shared/*": ["src/shared/*"]
-    }
+    },
+    "typeRoots": ["node_modules/@types"],
+    "types": []
   },
   "include": [
     "src/**/*"
@@ -33,6 +35,8 @@
     "node_modules",
     "dist",
     "build",
-    "release"
+    "release",
+    "**/dist/**",
+    "src/renderer/dist"
   ]
-} 
+}
