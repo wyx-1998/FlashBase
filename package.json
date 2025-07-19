@@ -2,7 +2,7 @@
   "name": "flashbase",
   "version": "1.0.0",
   "description": "FlashBase - 闪电般的知识库管理工具",
-  "main": "dist/main/app.js",
+  "main": "dist/main/main/app.js",
   "homepage": "./",
   "author": "Dia Team",
   "license": "MIT",
@@ -65,7 +65,8 @@
     "appId": "com.flashbase.desktop",
     "productName": "FlashBase",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build-resources"
     },
     "files": [
       "dist/**/*",

@@ -69,9 +69,8 @@ debug_*.py
 *.test.js
 *.spec.js
 
-# Development scripts
+# Development scripts (exclude temporary scripts, keep start.sh)
 dev.sh
-start.sh
 stop.sh
 status.sh
 

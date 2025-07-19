@@ -51,14 +51,25 @@ src/
 ### 2. 克隆和安装
 ```bash
 # 进入项目目录
-cd Dia-FastGPT桌面应用
+cd FlashBase
 
-# 安装依赖
+# 方式一：使用快速启动脚本（推荐）
+chmod +x start.sh
+./start.sh
+
+# 方式二：手动安装和启动
 npm install
-
-# 验证安装
 npm run dev
 ```
+
+#### 快速启动脚本说明
+项目提供了 `start.sh` 脚本，可以自动化处理开发环境的搭建：
+- 自动检查 Node.js 和 npm 环境
+- 智能安装项目依赖（仅在需要时）
+- 自动构建应用
+- 启动开发服务器
+
+这是新手开发者的推荐方式，可以避免环境配置问题。
 
 ### 3. 开发工具配置
 
@@ -470,4 +481,4 @@ docs(readme): update installation guide
 3. 创建新 Issue 并详细描述问题
 4. 联系开发团队
 
-**Happy Coding! 🚀** 
+**Happy Coding! 🚀**

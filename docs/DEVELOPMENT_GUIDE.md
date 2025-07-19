@@ -4,34 +4,30 @@
 
 ### 一键启动
 ```bash
-# 方法1: 使用脚本
+# 推荐方式：使用启动脚本
+chmod +x start.sh  # 首次使用需要添加执行权限
 ./start.sh
 
-# 方法2: 使用npm
-npm start
+# 手动方式：使用npm命令
+npm run dev
 ```
 
 ### 停止应用
 ```bash
-# 方法1: 使用脚本
-./stop.sh
-
-# 方法2: 使用npm
-npm stop
+# 在终端中按 Ctrl+C 停止应用
+# 或者直接关闭应用窗口
 ```
 
 ## 📋 管理命令
 
 ### 启动相关
 - `./start.sh` - 一键启动应用（推荐）
-- `npm start` - 同上
 - `npm run dev` - 手动开发模式启动
 - `npm run build` - 构建应用
 
 ### 维护相关
-- `./stop.sh` - 停止应用
-- `./status.sh` - 检查应用状态
-- `npm run package` - 打包应用
+- `npm run package` - 打包当前平台
+- `npm run package:all` - 打包所有平台
 
 ## 🔧 启动流程说明
 
@@ -40,44 +36,45 @@ npm stop
 
 1. **环境检查**
    - 检查 Node.js 和 npm 是否安装
-   - 检查项目依赖是否完整
-   - 自动安装缺失的依赖
+   - 显示当前环境版本信息
+   - 验证环境兼容性
 
-2. **清理工作**
-   - 检查并清理端口占用（5173）
-   - 终止旧的进程（Electron、Vite）
-   - 清理相关的 npm 进程
+2. **依赖管理**
+   - 检查 node_modules 是否存在
+   - 首次运行时自动安装项目依赖
+   - 跳过已安装的依赖以节省时间
 
 3. **构建应用**
+   - 执行 npm run build 构建应用
    - 编译 TypeScript 代码
-   - 构建渲染进程文件
-   - 验证构建结果
+   - 打包渲染进程资源
 
-4. **启动服务**
-   - 启动 Vite 开发服务器（渲染进程）
-   - 启动 Electron 主进程
-   - 验证启动状态
+4. **启动开发服务器**
+   - 启动 npm run dev 开发模式
+   - 同时启动主进程和渲染进程
+   - 提供热重载功能
 
-5. **状态反馈**
-   - 显示运行状态
-   - 提供日志文件位置
-   - 列出可用功能和管理命令
+5. **用户提示**
+   - 显示启动进度和状态
+   - 提供停止服务的说明
+   - 友好的错误处理和提示
 
 ## 📊 状态监控
 
-### 日志文件
-启动后会生成以下日志文件：
-- `/tmp/dia-fastgpt-vite.log` - Vite 渲染服务器日志
-- `/tmp/dia-fastgpt-electron.log` - Electron 主进程日志
+### 运行状态
+启动脚本会在终端显示实时状态信息：
+- 环境检查结果
+- 依赖安装进度
+- 构建过程输出
+- 开发服务器启动状态
 
 ### 查看日志
 ```bash
-# 实时查看所有日志
-tail -f /tmp/dia-fastgpt-*.log
+# 开发模式下，日志直接显示在终端
+# Vite 和 Electron 的输出会同时显示
 
-# 查看特定日志
-tail -f /tmp/dia-fastgpt-vite.log      # Vite日志
-tail -f /tmp/dia-fastgpt-electron.log  # Electron日志
+# 如需查看详细调试信息，可以设置环境变量
+DEBUG=* ./start.sh
 ```
 
 ### 检查状态
@@ -85,11 +82,11 @@ tail -f /tmp/dia-fastgpt-electron.log  # Electron日志
 # 检查应用进程
 ps aux | grep -E "(electron|vite)" | grep -v grep
 
-# 检查端口占用
+# 检查端口占用（默认5173）
 lsof -i :5173
 
-# 使用状态脚本
-./status.sh  # 如果可用
+# 检查应用是否正常运行
+# 应用启动后会显示在系统托盘
 ```
 
 ## 🛠️ 故障排除
@@ -98,27 +95,31 @@ lsof -i :5173
 
 **1. 端口占用**
 - 症状：启动失败，提示端口被占用
-- 解决：脚本会自动清理端口，如果仍有问题，手动运行 `./stop.sh`
+- 解决：手动终止占用端口的进程，或使用 `lsof -ti:5173 | xargs kill -9`
 
 **2. 进程残留**
 - 症状：新进程无法启动，旧进程仍在运行
-- 解决：运行 `./stop.sh` 强制清理所有进程
+- 解决：按 `Ctrl+C` 停止当前进程，或手动终止相关进程
 
 **3. 构建失败**
 - 症状：TypeScript 编译错误或依赖问题
-- 解决：检查错误信息，必要时删除 `node_modules` 重新安装
+- 解决：检查错误信息，必要时删除 `node_modules` 重新运行 `./start.sh`
 
-**4. Electron 启动失败**
-- 症状：渲染服务器正常，但主进程无法启动
-- 解决：查看 `/tmp/dia-fastgpt-electron.log` 日志文件
+**4. 环境问题**
+- 症状：Node.js 或 npm 版本不兼容
+- 解决：启动脚本会自动检查环境，按提示升级相关工具
+
+**5. 权限问题**
+- 症状：脚本无法执行
+- 解决：运行 `chmod +x start.sh` 添加执行权限
 
 ### 手动清理
-如果自动脚本无法解决问题：
+如果启动脚本无法解决问题：
 
 ```bash
 # 强制终止所有相关进程
-pkill -f "electron.*app.js"
-pkill -f "vite.*renderer"
+pkill -f "electron"
+pkill -f "vite"
 pkill -f "npm.*dev"
 
 # 清理端口
@@ -126,7 +127,7 @@ lsof -ti:5173 | xargs kill -9
 
 # 重新安装依赖
 rm -rf node_modules package-lock.json
-npm install
+./start.sh  # 脚本会自动重新安装依赖
 ```
 
 ## 🔧 开发模式
@@ -194,4 +195,4 @@ npm run package:all
 - 确保所有功能正常
 - 验证快捷键工作正常
 - 测试 FastGPT 连接
-- 检查错误处理 
+- 检查错误处理
