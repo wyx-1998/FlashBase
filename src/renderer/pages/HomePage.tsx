@@ -10,6 +10,7 @@ const HomePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [clipboardMessage, setClipboardMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [fileImportMessage, setFileImportMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
   
   const electron = useElectron()
 
@@ -123,6 +124,64 @@ const HomePage: React.FC = () => {
   //   // 截图功能已移除
   // }
 
+  const handleFileImport = async () => {
+    setMessage(null)
+    setFileImportMessage(null)
+    setIsLoading(true)
+    
+    try {
+      // 显示文件选择对话框
+      const fileResult = await electron.showFileDialog()
+      
+      if (fileResult.canceled || fileResult.filePaths.length === 0) {
+        setFileImportMessage({ type: 'info', text: '已取消文件选择' })
+        return
+      }
+      
+      // 导入选中的文件
+      for (const filePath of fileResult.filePaths) {
+        try {
+          // 验证文件
+          const validation = await electron.validateFile(filePath)
+          if (!validation.valid) {
+            setFileImportMessage({ 
+              type: 'error', 
+              text: `文件验证失败: ${validation.error}` 
+            })
+            continue
+          }
+          
+          // 导入文件
+          const result = await electron.importFile({ filePath })
+          
+          if (result && result.success) {
+            setFileImportMessage({ 
+              type: 'success', 
+              text: `文件导入成功: ${filePath.split('/').pop()}` 
+            })
+          } else {
+            const errorMessage = result?.error || '文件导入失败'
+            setFileImportMessage({ type: 'error', text: errorMessage })
+          }
+        } catch (error: any) {
+          console.error('文件导入异常:', error)
+          setFileImportMessage({ 
+            type: 'error', 
+            text: `文件导入失败: ${error.message || '未知错误'}` 
+          })
+        }
+      }
+    } catch (error: any) {
+      console.error('文件导入过程异常:', error)
+      setFileImportMessage({ 
+        type: 'error', 
+        text: `文件导入失败: ${error.message || '未知错误'}` 
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleTestConnection = async () => {
     setIsLoading(true)
     setMessage(null)
@@ -171,6 +230,19 @@ const HomePage: React.FC = () => {
 
           <button 
             className="action-card"
+            onClick={handleFileImport}
+            disabled={isLoading}
+          >
+            <div className="action-icon">📁</div>
+            <div className="action-content">
+              <h3>文件导入</h3>
+              <p>选择文件导入到知识库</p>
+              <small>快捷键: {settings?.shortcuts?.fileImport || 'Ctrl+Shift+F'}</small>
+            </div>
+          </button>
+
+          <button 
+            className="action-card"
             onClick={handleTestConnection}
             disabled={isLoading}
           >
@@ -182,6 +254,13 @@ const HomePage: React.FC = () => {
             </div>
           </button>
         </div>
+        
+        {/* 文件导入消息提示 */}
+        {fileImportMessage && (
+          <div className={`message ${fileImportMessage.type}`}>
+            {fileImportMessage.text}
+          </div>
+        )}
         
         {/* 剪贴板预览区域移到按钮下方 */}
         {clipboardContent?.text && (

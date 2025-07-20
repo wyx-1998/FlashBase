@@ -138,7 +138,23 @@ class DiaFastGPTApp {
 
   private async registerGlobalShortcuts(): Promise<void> {
     const settings = this.settingsManager.getSettings();
-    const shortcuts = settings.shortcuts;
+    let shortcuts = settings.shortcuts;
+
+    // 确保所有快捷键都有默认值
+    if (!shortcuts.fileImport) {
+      console.log('fileImport快捷键缺失，使用默认值');
+      shortcuts = {
+        ...shortcuts,
+        fileImport: 'CommandOrControl+Shift+F'
+      };
+      // 保存更新后的设置
+      this.settingsManager.saveSettings({
+        ...settings,
+        shortcuts
+      });
+    }
+
+
 
     // 注册快捷键处理器
     // 智能导入和快速导入功能已移除
@@ -159,6 +175,15 @@ class DiaFastGPTApp {
       this.handleShortcutAction(ShortcutAction.CLIPBOARD_IMPORT);
     });
 
+    // 检查fileImport快捷键是否存在
+    if (shortcuts.fileImport) {
+      this.shortcutManager.register(shortcuts.fileImport, () => {
+        this.handleShortcutAction(ShortcutAction.FILE_IMPORT);
+      });
+    } else {
+      console.warn('fileImport快捷键未定义，跳过注册');
+    }
+
     this.shortcutManager.register(shortcuts.showPanel, () => {
       this.handleShortcutAction(ShortcutAction.SHOW_PANEL);
     });
@@ -178,6 +203,9 @@ class DiaFastGPTApp {
         //   break;
         case ShortcutAction.CLIPBOARD_IMPORT:
           await this.handleClipboardImport();
+          break;
+        case ShortcutAction.FILE_IMPORT:
+          await this.handleFileImport();
           break;
         case ShortcutAction.SHOW_PANEL:
           this.windowManager.showQuickPanel();
@@ -225,9 +253,71 @@ class DiaFastGPTApp {
     }
   }
 
+  private async handleFileImport(): Promise<void> {
+    try {
+      const { dialog } = require('electron');
+      const result = await dialog.showOpenDialog(this.windowManager.getMainWindow()!, {
+        title: '选择要导入的文件',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: '文档文件', extensions: ['txt', 'md', 'doc', 'docx', 'pdf'] },
+          { name: '图片文件', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] },
+          { name: '代码文件', extensions: ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'css', 'html'] },
+          { name: '所有文件', extensions: ['*'] }
+        ]
+      });
+
+      if (!result.canceled && result.filePaths.length > 0) {
+        for (const filePath of result.filePaths) {
+          await this.importFileContent(filePath);
+        }
+      }
+    } catch (error) {
+      console.error('文件导入失败:', error);
+      const settings = this.settingsManager.getSettings();
+      if (settings.general.enableNotifications) {
+        this.windowManager.showNotification(
+          '文件导入失败',
+          error instanceof Error ? error.message : '未知错误'
+        );
+      }
+    }
+  }
+
+  private async importFileContent(filePath: string): Promise<void> {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      const fileName = path.basename(filePath);
+      const fileExtension = path.extname(filePath).toLowerCase();
+      const stats = fs.statSync(filePath);
+      
+      // 读取文件内容
+      let content = '';
+      if (['.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.css', '.html'].includes(fileExtension)) {
+        content = fs.readFileSync(filePath, 'utf8');
+      } else {
+        // 对于其他文件类型，暂时只记录文件信息
+        content = `文件名: ${fileName}\n文件大小: ${stats.size} 字节\n文件路径: ${filePath}`;
+      }
+      
+      // 导入内容
+      const result = await this.importContent(content, 'file');
+      console.log(`文件 ${fileName} 导入结果:`, result);
+      
+    } catch (error) {
+      console.error(`导入文件 ${filePath} 失败:`, error);
+      throw error;
+    }
+  }
+
   private async importContent(content: string, source: string): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
       console.log(`开始导入内容: 来源=${source}, 长度=${content.length}`);
+      
+      // 根据来源确定内容类型
+      const contentType = source === 'file' ? 'file' : 'text';
       
       // 获取有写权限的知识库
       const appSettings = this.settingsManager.getSettings();
@@ -300,11 +390,11 @@ class DiaFastGPTApp {
       
       const result = await this.fastgptClient.importContent({
         content,
-        type: 'text' as any,
+        type: contentType as any,
         source,
         metadata: {
           source: source as any,
-          type: 'text' as any,
+          type: contentType as any,
           timestamp: Date.now(),
           size: content.length
         },
@@ -318,12 +408,12 @@ class DiaFastGPTApp {
       const historyItem = {
         id: Date.now().toString(),
         content,
-        type: 'text' as any,
+        type: contentType as any,
         source: source as any,
         timestamp: Date.now(),
         metadata: {
           source: source as any,
-          type: 'text' as any,
+          type: contentType as any,
           timestamp: Date.now(),
           size: content.length,
           knowledgeBaseName: targetKnowledgeBase.name
@@ -359,17 +449,20 @@ class DiaFastGPTApp {
     } catch (error: any) {
       console.error('导入内容失败:', error);
       
+      // 根据来源确定内容类型
+      const contentType = source === 'file' ? 'file' : 'text';
+      
       // 保存失败记录到历史
       console.log('开始保存失败记录到历史...');
       const failedHistoryItem = {
         id: Date.now().toString(),
         content,
-        type: 'text' as any,
+        type: contentType as any,
         source: source as any,
         timestamp: Date.now(),
         metadata: {
           source: source as any,
-          type: 'text' as any,
+          type: contentType as any,
           timestamp: Date.now(),
           size: content.length
         },
@@ -406,6 +499,34 @@ class DiaFastGPTApp {
     }
   }
 
+  private getMimeType(extension: string): string {
+    const mimeTypes: { [key: string]: string } = {
+      '.txt': 'text/plain',
+      '.md': 'text/markdown',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.bmp': 'image/bmp',
+      '.webp': 'image/webp',
+      '.js': 'text/javascript',
+      '.ts': 'text/typescript',
+      '.jsx': 'text/jsx',
+      '.tsx': 'text/tsx',
+      '.py': 'text/x-python',
+      '.java': 'text/x-java-source',
+      '.cpp': 'text/x-c++src',
+      '.c': 'text/x-csrc',
+      '.css': 'text/css',
+      '.html': 'text/html'
+    };
+    
+    return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
+  }
+
   private registerIPCHandlers(): void {
     // 快捷键相关
     ipcMain.handle(IPCChannel.REGISTER_SHORTCUTS, async (event, shortcuts) => {
@@ -419,6 +540,135 @@ class DiaFastGPTApp {
     // 内容处理相关
     ipcMain.handle(IPCChannel.GET_CLIPBOARD_CONTENT, async () => {
       return this.contentExtractor.getClipboardContent();
+    });
+
+    // 文件处理相关
+    ipcMain.handle(IPCChannel.SHOW_FILE_DIALOG, async () => {
+      try {
+        const { dialog } = require('electron');
+        const result = await dialog.showOpenDialog(this.windowManager.getMainWindow()!, {
+          title: '选择要导入的文件',
+          properties: ['openFile', 'multiSelections'],
+          filters: [
+            { name: '文档文件', extensions: ['txt', 'md', 'doc', 'docx', 'pdf'] },
+            { name: '图片文件', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] },
+            { name: '代码文件', extensions: ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'css', 'html'] },
+            { name: '所有文件', extensions: ['*'] }
+          ]
+        });
+        return result;
+      } catch (error) {
+        console.error('显示文件对话框失败:', error);
+        return { canceled: true, filePaths: [] };
+      }
+    });
+
+    ipcMain.handle(IPCChannel.VALIDATE_FILE, async (event, filePath) => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        if (!fs.existsSync(filePath)) {
+          return {
+            valid: false,
+            error: '文件不存在'
+          };
+        }
+        
+        const stats = fs.statSync(filePath);
+        const fileExtension = path.extname(filePath).toLowerCase();
+        const supportedExtensions = ['.txt', '.md', '.doc', '.docx', '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.css', '.html'];
+        
+        if (!supportedExtensions.includes(fileExtension)) {
+          return {
+            valid: false,
+            error: '不支持的文件格式',
+            supportedFormats: supportedExtensions
+          };
+        }
+        
+        // 检查文件大小（限制为10MB）
+        const maxSize = 10 * 1024 * 1024;
+        if (stats.size > maxSize) {
+          return {
+            valid: false,
+            error: '文件大小超过限制（最大10MB）'
+          };
+        }
+        
+        return { valid: true };
+      } catch (error) {
+        console.error('验证文件失败:', error);
+        return {
+          valid: false,
+          error: error instanceof Error ? error.message : '文件验证失败'
+        };
+      }
+    });
+
+    ipcMain.handle(IPCChannel.IMPORT_FILE, async (event, fileData) => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        const { filePath, knowledgeBaseId } = fileData;
+        const fileName = path.basename(filePath);
+        const fileExtension = path.extname(filePath).toLowerCase();
+        const stats = fs.statSync(filePath);
+        
+        // 读取文件内容
+        let content = '';
+        if (['.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.css', '.html'].includes(fileExtension)) {
+          content = fs.readFileSync(filePath, 'utf8');
+        } else {
+          // 对于其他文件类型，暂时只记录文件信息
+          content = `文件名: ${fileName}\n文件大小: ${stats.size} 字节\n文件路径: ${filePath}`;
+        }
+        
+        // 构建导入数据
+        const importData = {
+          content,
+          type: 'file' as any,
+          source: 'file',
+          metadata: {
+            source: 'file' as any,
+            type: 'file' as any,
+            timestamp: Date.now(),
+            size: content.length,
+            filename: fileName,
+            mimeType: this.getMimeType(fileExtension),
+            originalPath: filePath
+          },
+          knowledgeBaseId
+        };
+        
+        // 导入内容
+        if (knowledgeBaseId) {
+          const result = await this.fastgptClient.importContent(importData);
+          
+          // 保存到历史记录
+          const historyItem = {
+            id: Date.now().toString(),
+            content: importData.content,
+            type: importData.type,
+            source: importData.source as any,
+            timestamp: Date.now(),
+            metadata: importData.metadata,
+            result
+          };
+          await this.historyManager.addItem(historyItem);
+          
+          return result;
+        } else {
+          return await this.importContent(content, 'file');
+        }
+      } catch (error) {
+        console.error('IPC文件导入失败:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '文件导入失败'
+        };
+      }
     });
 
     // 截图和OCR功能已移除

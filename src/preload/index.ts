@@ -18,6 +18,11 @@ const electronAPI = {
   // takeScreenshot: () => ipcRenderer.invoke('capture-screen'),  // 截图功能已移除
   // extractTextFromImage: (imageBuffer: any) => ipcRenderer.invoke('extract-text-from-image', imageBuffer), // 已移除OCR功能
   
+  // 文件处理
+  showFileDialog: () => ipcRenderer.invoke('show-file-dialog'),
+  validateFile: (filePath: string) => ipcRenderer.invoke('validate-file', filePath),
+  importFile: (fileData: any) => ipcRenderer.invoke('import-file', fileData),
+  
   // FastGPT API
   testConnection: () => ipcRenderer.invoke('test-fastgpt-connection'),
   getKnowledgeBases: () => ipcRenderer.invoke('get-knowledge-bases'),

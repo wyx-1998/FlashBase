@@ -4,6 +4,7 @@ export interface ShortcutConfig {
   // quickImport: string;        // 快速导入：已移除
   // screenCapture: string;      // 截图导入：已移除
   clipboardImport: string;    // 剪贴板导入：默认 Ctrl+Shift+V
+  fileImport: string;         // 文件导入：默认 Ctrl+Shift+F
   showPanel: string;          // 显示面板：默认 Ctrl+Shift+D
 }
 
@@ -54,6 +55,22 @@ export interface ImportData {
   source: string;
   metadata: ContentMetadata;
   knowledgeBaseId?: string; // 可选，如果未提供则由主进程处理知识库选择
+}
+
+// 文件导入数据结构
+export interface FileImportData {
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  knowledgeBaseId?: string;
+}
+
+// 文件验证结果
+export interface FileValidationResult {
+  valid: boolean;
+  error?: string;
+  supportedFormats?: string[];
 }
 
 // FastGPT 配置
@@ -142,6 +159,11 @@ export enum IPCChannel {
   // CAPTURE_SCREEN = 'capture-screen',  // 已移除截图功能
   // EXTRACT_TEXT_FROM_IMAGE = 'extract-text-from-image',  // 已移除OCR功能
   
+  // 文件处理
+  IMPORT_FILE = 'import-file',
+  VALIDATE_FILE = 'validate-file',
+  SHOW_FILE_DIALOG = 'show-file-dialog',
+  
   // FastGPT 集成
   TEST_FASTGPT_CONNECTION = 'test-fastgpt-connection',
   GET_KNOWLEDGE_BASES = 'get-knowledge-bases',
@@ -174,5 +196,6 @@ export enum ShortcutAction {
   // QUICK_IMPORT = 'quick-import',      // 已移除快速导入功能
   // SCREEN_CAPTURE = 'screen-capture',  // 已移除截图功能
   CLIPBOARD_IMPORT = 'clipboard-import',
+  FILE_IMPORT = 'file-import',
   SHOW_PANEL = 'show-panel'
 }

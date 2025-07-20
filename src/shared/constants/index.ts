@@ -6,6 +6,7 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig = {
   // quickImport: 'CommandOrControl+Shift+F',   // 快速导入功能已移除
   // screenCapture: 'CommandOrControl+Shift+S', // 截图功能已移除
   clipboardImport: 'CommandOrControl+Shift+V',
+  fileImport: 'CommandOrControl+Shift+F',
   showPanel: 'CommandOrControl+Shift+D'
 };
 
@@ -33,8 +34,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // 应用信息
 export const APP_INFO = {
   name: 'FlashBase',
-  version: '1.0.0',
-  description: 'FlashBase - 闪电般的知识库管理工具',
+  version: '1.1.0',
+  description: 'FlashBase - 闪电般的知识库管理工具，支持文件导入功能',
   homepage: 'https://github.com/wyx-1998/FlashBase'
 };
 
@@ -103,6 +104,9 @@ export const ERROR_CODES = {
   FASTGPT_IMPORT_FAILED: 'FASTGPT_IMPORT_FAILED',
   SHORTCUT_REGISTER_FAILED: 'SHORTCUT_REGISTER_FAILED',
   // OCR_FAILED: 'OCR_FAILED', // 已移除OCR功能
-  CLIPBOARD_ACCESS_FAILED: 'CLIPBOARD_ACCESS_FAILED'
+  CLIPBOARD_ACCESS_FAILED: 'CLIPBOARD_ACCESS_FAILED',
   // SCREEN_CAPTURE_FAILED: 'SCREEN_CAPTURE_FAILED' // 截图功能已移除
+  FILE_IMPORT_FAILED: 'FILE_IMPORT_FAILED',
+  FILE_VALIDATION_FAILED: 'FILE_VALIDATION_FAILED',
+  FILE_READ_FAILED: 'FILE_READ_FAILED'
 };

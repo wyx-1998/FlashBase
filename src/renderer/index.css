@@ -3,7 +3,7 @@
 @import 'tailwindcss/utilities';
 
 /* Apple 字体导入 */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import './fonts.css';
 
 /* 全局重置和基础样式 */
 * {

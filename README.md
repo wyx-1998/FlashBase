@@ -2,17 +2,26 @@
 
 一个跨平台的桌面应用，为 FastGPT 知识库提供系统级快捷键支持，闪电般的知识管理体验。
 
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/wyx-1998/FlashBase/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#)
+
+> 🚀 **最新版本 v1.1.0** 新增文件导入功能和历史记录筛选，支持拖拽上传多种文档格式！
+
 ## ✨ 功能特性
 
 ### 🚀 核心功能
 - **全局快捷键**：在任何应用中都可以使用的系统级快捷键
 - **剪贴板导入**：快速导入剪贴板内容到知识库
-- **历史记录**：完整的导入历史追踪和管理
+- **文件导入**：支持拖拽上传Word、PPT、PDF、TXT等多种文档格式
+- **历史记录**：完整的导入历史追踪和管理，支持按内容类型（文本/文件）筛选
+- **本地化优化**：使用本地字体，提升加载速度和离线体验
 
 ### 🎯 快捷键功能
 | 快捷键 | 功能 | 描述 |
 |--------|------|------|
 | `Ctrl+Shift+V` | 剪贴板导入 | 导入剪贴板内容到知识库 |
+| `Ctrl+Shift+F` | 文件导入 | 快速打开文件导入界面 |
 | `Ctrl+Shift+D` | 显示面板 | 显示快捷操作面板 |
 
 ### 🎨 用户界面

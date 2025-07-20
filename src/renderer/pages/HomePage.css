@@ -268,6 +268,36 @@
   border-color: rgba(0, 122, 255, 0.2);
 }
 
+/* 文件导入消息样式 */
+.file-import-message {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-lg);
+  font-weight: 500;
+  border: 1px solid transparent;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: slideInDown 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.file-import-message.success {
+  background: rgba(52, 199, 89, 0.1);
+  color: #34C759;
+  border-color: rgba(52, 199, 89, 0.2);
+}
+
+.file-import-message.error {
+  background: rgba(255, 59, 48, 0.1);
+  color: #FF3B30;
+  border-color: rgba(255, 59, 48, 0.2);
+}
+
+.file-import-message.info {
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--apple-blue);
+  border-color: rgba(0, 122, 255, 0.2);
+}
+
 .status-grid {
   background: var(--apple-background);
   border: 1px solid var(--apple-separator);

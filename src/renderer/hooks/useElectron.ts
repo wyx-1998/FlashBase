@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, HistoryItem, KnowledgeBase, ImportData, ImportResult, ClipboardContent } from '../../shared/types'
+import type { AppSettings, HistoryItem, KnowledgeBase, ImportData, ImportResult, ClipboardContent, FileImportData, FileValidationResult } from '../../shared/types'
 
 export const useElectron = () => {
   // 获取设置
@@ -35,6 +35,21 @@ export const useElectron = () => {
   // 获取剪贴板内容
   const getClipboardContent = useCallback(async (): Promise<ClipboardContent> => {
     return window.electronAPI?.getClipboardContent() || {}
+  }, [])
+
+  // 显示文件选择对话框
+  const showFileDialog = useCallback(async (): Promise<{ canceled: boolean; filePaths: string[] }> => {
+    return window.electronAPI?.showFileDialog() || { canceled: true, filePaths: [] }
+  }, [])
+
+  // 验证文件
+  const validateFile = useCallback(async (filePath: string): Promise<FileValidationResult> => {
+    return window.electronAPI?.validateFile(filePath) || { valid: false, error: '验证失败' }
+  }, [])
+
+  // 导入文件
+  const importFile = useCallback(async (fileData: FileImportData): Promise<ImportResult> => {
+    return window.electronAPI?.importFile(fileData) || { success: false }
   }, [])
 
   // 截图功能已移除
@@ -76,6 +91,9 @@ export const useElectron = () => {
     getKnowledgeBases,
     importContent,
     getClipboardContent,
+    showFileDialog,
+    validateFile,
+    importFile,
     // takeScreenshot,  // 截图功能已移除
     testConnection,
     showNotification,
