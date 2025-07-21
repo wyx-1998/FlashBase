@@ -33,9 +33,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 // 应用信息
 export const APP_INFO = {
-  name: 'FlashBase',
-  version: '1.1.1',
-  description: 'FlashBase - 智能知识库管理工具',
+  name: 'FlashBase Dev',
+  version: '1.1.1-dev',
+  description: 'FlashBase Dev - 开发测试环境版本',
   homepage: 'https://github.com/wyx-1998/FlashBase'
 };
 

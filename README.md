@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#)
 
-> 🚀 **最新版本 v1.1.1** 完善文件导入快捷键配置，优化托盘交互体验，提升系统稳定性！
+> 🚀 **最新版本 v1.1.1** 优化文件导入快捷键配置，修复托盘点击闪退问题，提升用户体验！
 
 ## ✨ 功能特性
 
