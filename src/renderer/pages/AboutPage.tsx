@@ -24,20 +24,16 @@ const AboutPage: React.FC = () => {
   const getShortcuts = () => {
     if (!settings?.shortcuts) {
       return [
-        // 智能导入和快速导入功能已移除
-        // { action: '智能导入', key: 'Ctrl+Shift+I', desc: '优先导入选中文本，否则导入剪贴板内容' },
-        // { action: '快速导入', key: 'Ctrl+Shift+F', desc: '直接导入剪贴板内容' },
-        { action: ' 剪贴板导入', key: 'Ctrl+Shift+V', desc: '导入剪贴板文本内容' },
-        { action: ' 显示面板', key: 'Ctrl+Shift+D', desc: '显示快速操作面板' }
+        { action: '📋 剪贴板导入', key: 'Ctrl+Shift+V', desc: '导入剪贴板文本内容到知识库' },
+        { action: '📁 文件导入', key: 'Ctrl+Shift+F', desc: '选择文件导入到知识库' },
+        { action: '🎛️ 显示面板', key: 'Ctrl+Shift+D', desc: '显示快速操作面板' }
       ]
     }
     
     return [
-      // 智能导入和快速导入功能已移除
-      // { action: '智能导入', key: settings.shortcuts.smartImport, desc: '优先导入选中文本，否则导入剪贴板内容' },
-      // { action: '快速导入', key: settings.shortcuts.quickImport, desc: '直接导入剪贴板内容' },
-      { action: ' 剪贴板导入', key: settings.shortcuts.clipboardImport, desc: '导入剪贴板文本内容' },
-      { action: ' 显示面板', key: settings.shortcuts.showPanel, desc: '显示快速操作面板' }
+      { action: '📋 剪贴板导入', key: settings.shortcuts.clipboardImport, desc: '导入剪贴板文本内容到知识库' },
+      { action: '📁 文件导入', key: settings.shortcuts.fileImport, desc: '选择文件导入到知识库' },
+      { action: '🎛️ 显示面板', key: settings.shortcuts.showPanel, desc: '显示快速操作面板' }
     ]
   }
 

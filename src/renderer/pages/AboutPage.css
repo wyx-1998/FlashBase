@@ -92,10 +92,10 @@
 
 .shortcut-item {
   display: grid;
-  grid-template-columns: 120px 150px 1fr;
-  gap: 16px;
+  grid-template-columns: 140px 180px 1fr;
+  gap: 20px;
   align-items: center;
-  padding: 12px 0;
+  padding: 16px 0;
   border-bottom: 1px solid #f1f2f6;
 }
 
@@ -107,23 +107,29 @@
   font-weight: 600;
   color: #2c3e50;
   font-size: 14px;
-  white-space: pre;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shortcut-key {
   background: #f8f9fa;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 6px;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 12px;
   border: 1px solid #e9ecef;
   text-align: center;
   color: #495057;
+  white-space: nowrap;
+  min-width: 0;
+  word-break: break-all;
 }
 
 .shortcut-desc {
   font-size: 13px;
   color: #7f8c8d;
+  line-height: 1.4;
 }
 
 .tech-stack {
