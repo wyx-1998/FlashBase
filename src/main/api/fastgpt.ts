@@ -29,8 +29,24 @@ export class FastGPTClient {
       timeout: this.config.timeout || 10000,
       headers: {
         'Authorization': `Bearer ${this.config.apiKey || ''}`,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json; charset=utf-8'
+      },
+      // 确保响应正确处理UTF-8编码
+      responseType: 'json',
+      responseEncoding: 'utf8',
+      transformResponse: [
+        function (data) {
+          // 如果数据是字符串，确保正确解析JSON
+          if (typeof data === 'string') {
+            try {
+              return JSON.parse(data);
+            } catch (e) {
+              return data;
+            }
+          }
+          return data;
+        }
+      ]
     });
   }
 
@@ -173,9 +189,12 @@ export class FastGPTClient {
       const requestData = {
         datasetId,
         parentId: null,
-        name: '默认导入集合',
+        name: '从插件导入', // 修改集合名称，避免乱码
         type: 'file',
-        metadata: {}
+        metadata: {
+          source: 'flashbase-plugin',
+          description: '由FlashBase插件自动创建的集合'
+        }
       };
       console.log('创建集合请求数据:', requestData);
       
@@ -214,6 +233,12 @@ export class FastGPTClient {
   async importContent(data: ImportData): Promise<ImportResult> {
     try {
       console.log(`开始导入到知识库: ${data.knowledgeBaseId}`);
+      console.log('导入数据详情:', {
+        type: data.type,
+        hasMetadata: !!data.metadata,
+        originalPath: data.metadata?.originalPath,
+        contentPreview: data.content.substring(0, 100)
+      });
       
       // 检查知识库ID是否存在
       if (!data.knowledgeBaseId) {
@@ -223,41 +248,61 @@ export class FastGPTClient {
         };
       }
       
+      // 如果是文件类型且有文件路径，使用文件上传API
+      if (data.type === 'file' && data.metadata?.originalPath) {
+        console.log('✓ 检测到文件上传请求，调用uploadFile方法');
+        console.log('文件路径:', data.metadata.originalPath);
+        return await this.uploadFile(data);
+      }
+      
+      console.log('→ 使用普通文本导入方式');
+      
       // 先获取知识库的集合列表
       console.log('正在获取知识库的集合列表...');
       let collections = await this.getCollections(data.knowledgeBaseId);
       console.log(`获取到 ${collections.length} 个集合:`, collections.map(c => ({ id: c._id, name: c.name })));
       
-      // 如果没有集合，创建一个默认集合
-      if (collections.length === 0) {
-        console.log('知识库中没有集合，尝试创建默认集合...');
+      // 查找"从插件导入"集合
+      let targetCollection = collections.find(c => c.name === '从插件导入');
+      
+      // 如果没有找到"从插件导入"集合，创建一个
+      if (!targetCollection) {
+        console.log('没有找到"从插件导入"集合，尝试创建...');
         const newCollectionId = await this.createDefaultCollection(data.knowledgeBaseId);
         console.log('创建集合结果:', newCollectionId);
         
         if (!newCollectionId) {
-          console.error('创建默认集合失败');
-          return {
-            success: false,
-            error: '无法创建集合'
-          };
+          console.error('创建"从插件导入"集合失败');
+          // 如果创建失败，使用第一个可用集合
+          if (collections.length > 0) {
+            console.log('使用第一个可用集合作为备选');
+            targetCollection = collections[0];
+          } else {
+            return {
+              success: false,
+              error: '无法创建集合且没有可用集合'
+            };
+          }
+        } else {
+          console.log('"从插件导入"集合创建成功，重新获取集合列表...');
+          // 重新获取集合列表
+          collections = await this.getCollections(data.knowledgeBaseId);
+          targetCollection = collections.find(c => c.name === '从插件导入') || collections[0];
         }
-        
-        console.log('默认集合创建成功，重新获取集合列表...');
-        // 重新获取集合列表
-        collections = await this.getCollections(data.knowledgeBaseId);
-        console.log(`重新获取后有 ${collections.length} 个集合`);
+      } else {
+        console.log('找到"从插件导入"集合:', targetCollection.name);
       }
 
-      if (collections.length === 0) {
-        console.error('即使创建了默认集合，仍然没有可用的集合');
+      if (!targetCollection) {
+        console.error('没有可用的集合');
         return {
           success: false,
           error: '知识库中没有可用的集合'
         };
       }
 
-      // 使用第一个集合
-      const collectionId = collections[0]._id;
+      console.log(`使用集合: ${targetCollection.name} (ID: ${targetCollection._id})`);
+      const collectionId = targetCollection._id;
 
       const requestData = {
         collectionId: collectionId,  // 使用集合ID
@@ -386,6 +431,178 @@ export class FastGPTClient {
     }
   }
 
+  /**
+   * 上传文件到 FastGPT 知识库
+   */
+  async uploadFile(data: ImportData): Promise<ImportResult> {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const FormData = require('form-data');
+      const axios = require('axios');
+      
+      const filePath = data.metadata?.originalPath;
+      if (!filePath || !fs.existsSync(filePath)) {
+        return {
+          success: false,
+          error: '文件不存在或路径无效'
+        };
+      }
+      
+      const fileName = path.basename(filePath);
+      const fileExtension = path.extname(filePath).toLowerCase();
+      
+      console.log(`开始上传文件: ${fileName} 到知识库 ${data.knowledgeBaseId}`);
+      console.log(`文件路径: ${filePath}`);
+      console.log(`文件大小: ${fs.statSync(filePath).size} 字节`);
+      
+      // 创建 FormData
+      const formData = new FormData();
+      
+      // 判断是否为文本文件，如果是则指定UTF-8编码
+      const isTextFile = ['.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.css', '.html', '.json', '.xml', '.csv'].includes(fileExtension);
+      
+      // 处理文件名编码 - 解决FastGPT中文文件名乱码问题
+      // 根据GitHub issue #2282和相关解决方案，尝试多种编码方式
+      
+      let processedFileName = fileName;
+      
+      // 检测是否包含中文字符
+      if (!/^[\x00-\x7F]*$/.test(fileName)) {
+        console.log(`检测到非ASCII文件名: ${fileName}`);
+        
+        try {
+          // 方案1：URL编码（推荐方案，类似Web浏览器处理方式）
+          processedFileName = encodeURIComponent(fileName);
+          console.log(`文件名URL编码: ${fileName} -> ${processedFileName}`);
+        } catch (error) {
+          console.warn('文件名URL编码失败，尝试其他方案:', error);
+          
+          try {
+            // 方案2：Buffer转换（备用方案）
+            const utf8Buffer = Buffer.from(fileName, 'utf8');
+            processedFileName = utf8Buffer.toString('latin1');
+            console.log(`文件名Buffer转换: ${fileName} -> ${processedFileName}`);
+          } catch (bufferError) {
+            console.warn('文件名Buffer转换也失败，使用原始文件名:', bufferError);
+            processedFileName = fileName;
+          }
+        }
+      }
+      
+      // 创建文件选项
+      const fileOptions = {
+        filename: processedFileName, // 使用处理后的文件名
+        contentType: data.metadata?.mimeType || (isTextFile ? 'text/plain; charset=utf-8' : 'application/octet-stream')
+      };
+      
+      console.log(`最终使用的文件名: ${processedFileName}`);
+      
+      if (isTextFile) {
+        // 对于文本文件，先读取内容并确保UTF-8编码
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const buffer = Buffer.from(fileContent, 'utf8');
+        
+        formData.append('file', buffer, fileOptions);
+        
+        console.log(`文本文件 ${fileName} 已处理，编码: UTF-8`);
+      } else {
+        // 对于二进制文件，使用原有方式
+        formData.append('file', fs.createReadStream(filePath), fileOptions);
+        
+        console.log(`二进制文件 ${fileName} 已处理`);
+      }
+      
+      // 构建数据参数 - 根据 FastGPT 官方文档格式
+      // 注意：根据官方文档，localFile接口的data参数中不包含name字段
+      // 集合名称将由FastGPT根据文件名自动生成
+      const uploadData = {
+        datasetId: data.knowledgeBaseId,
+        parentId: null,
+        trainingType: 'chunk',
+        chunkSize: 512,
+        chunkSplitter: '',
+        qaPrompt: '',
+        metadata: {
+          source: 'flashbase-plugin',
+          originalFileName: fileName
+        }
+      };
+      
+      formData.append('data', JSON.stringify(uploadData));
+      
+      console.log('上传数据参数:', uploadData);
+      console.log('文件名将作为集合名称:', fileName);
+      console.log('FormData 字段:', Object.keys(formData.getHeaders()));
+      
+      // 直接使用 axios 而不是 this.api 实例，避免默认 Content-Type 冲突
+      const response = await axios.post(
+        `${this.config.baseUrl}/api/core/dataset/collection/create/localFile`,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            'Authorization': `Bearer ${this.config.apiKey}`
+          },
+          timeout: 120000, // 增加超时时间到2分钟
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
+        }
+      );
+      
+      console.log('文件上传响应状态:', response.status);
+      console.log('文件上传响应数据:', JSON.stringify(response.data, null, 2));
+      
+      if (response.status === 200 && response.data) {
+        // 检查响应结构
+        const responseData = response.data;
+        if (responseData.code === 200 || responseData.data) {
+          return {
+            success: true,
+            insertId: responseData.data?._id || responseData.data?.id || '文件上传成功',
+            message: `文件 ${fileName} 已成功上传到知识库并开始处理`
+          };
+        } else {
+          console.error('上传响应格式异常:', responseData);
+          return {
+            success: false,
+            error: responseData.message || '文件上传失败，响应格式异常'
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: `文件上传失败，服务器返回状态: ${response.status}`
+        };
+      }
+    } catch (error: any) {
+      console.error('文件上传失败:', error);
+      
+      let errorMessage = '文件上传失败';
+      if (error.response) {
+        console.error('上传错误状态:', error.response.status);
+        console.error('上传错误数据:', error.response.data);
+        console.error('上传错误头:', error.response.headers);
+        
+        errorMessage = error.response.data?.message || 
+                      error.response.data?.error || 
+                      error.response.data?.statusText ||
+                      `服务器错误 (${error.response.status})`;
+      } else if (error.request) {
+        console.error('网络请求失败:', error.request);
+        errorMessage = '网络连接失败，请检查 FastGPT 服务器地址和网络连接';
+      } else {
+        console.error('其他错误:', error.message);
+        errorMessage = error.message || '未知错误';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+  
   /**
    * 获取 API 状态
    */

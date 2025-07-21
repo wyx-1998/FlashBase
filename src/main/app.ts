@@ -152,6 +152,12 @@ class DiaFastGPTApp {
   private async showKnowledgeBaseSelection(knowledgeBases: any[]): Promise<any | null> {
     const { dialog } = require('electron');
     
+    // 如果只有一个知识库，直接返回
+    if (knowledgeBases.length === 1) {
+      console.log(`只有一个知识库，自动选择: ${knowledgeBases[0].name}`);
+      return knowledgeBases[0];
+    }
+    
     const choices = knowledgeBases.map((kb, index) => `${index}: ${kb.name}`);
     
     const result = await dialog.showMessageBox(this.windowManager.getMainWindow()!, {
@@ -329,22 +335,247 @@ class DiaFastGPTApp {
       const fileExtension = path.extname(filePath).toLowerCase();
       const stats = fs.statSync(filePath);
       
-      // 读取文件内容
-      let content = '';
-      if (['.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.css', '.html'].includes(fileExtension)) {
-        content = fs.readFileSync(filePath, 'utf8');
-      } else {
-        // 对于其他文件类型，暂时只记录文件信息
-        content = `文件名: ${fileName}\n文件大小: ${stats.size} 字节\n文件路径: ${filePath}`;
-      }
+      console.log(`开始处理文件: ${fileName}, 扩展名: ${fileExtension}, 大小: ${stats.size} 字节`);
       
-      // 导入内容
-      const result = await this.importContent(content, 'file');
-      console.log(`文件 ${fileName} 导入结果:`, result);
+      // 获取有写权限的知识库
+      const appSettings = this.settingsManager.getSettings();
+      console.log('FastGPT配置:', {
+        baseUrl: appSettings.fastgpt.baseUrl,
+        hasApiKey: !!appSettings.fastgpt.apiKey,
+        timeout: appSettings.fastgpt.timeout
+      });
+      
+      // 获取所有知识库并筛选有权限的
+      console.log('正在获取知识库列表...');
+      const allKnowledgeBases = await this.fastgptClient.getKnowledgeBases();
+      console.log(`获取到 ${allKnowledgeBases.length} 个知识库`);
+      
+      if (allKnowledgeBases.length === 0) {
+        throw new Error('没有可用的知识库');
+      }
+
+      // 查找有写权限的知识库
+      let writableKnowledgeBases = [];
+      console.log('开始检查知识库权限...');
+      
+      for (const kb of allKnowledgeBases) {
+        try {
+          console.log(`检查知识库权限: ${kb.name} (ID: ${kb.id})`);
+          const hasWritePermission = await this.fastgptClient.checkWritePermission(kb.id);
+          console.log(`知识库 ${kb.name} 权限检查结果: ${hasWritePermission}`);
+          
+          if (hasWritePermission) {
+            writableKnowledgeBases.push(kb);
+            console.log(`✓ 知识库 ${kb.name} 有写权限`);
+          } else {
+            console.log(`✗ 知识库 ${kb.name} 无写权限`);
+          }
+        } catch (error) {
+          console.warn(`检查知识库 ${kb.name} 权限失败:`, error);
+          continue;
+        }
+      }
+
+      console.log(`找到 ${writableKnowledgeBases.length} 个有写权限的知识库`);
+
+      if (writableKnowledgeBases.length === 0) {
+        throw new Error('没有找到具有写权限的知识库');
+      }
+
+      // 显示知识库选择对话框
+      const targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
+      if (!targetKnowledgeBase) {
+        console.log('用户取消了知识库选择');
+        throw new Error('用户取消了知识库选择');
+      }
+      console.log(`用户选择了知识库: ${targetKnowledgeBase.name}`);
+      
+      // 构建导入数据，包含文件路径信息
+      const importData = {
+        content: `文件: ${fileName}`, // 简单的内容描述
+        type: 'file' as any,
+        source: 'file',
+        metadata: {
+          source: 'file' as any,
+          type: 'file' as any,
+          timestamp: Date.now(),
+          size: stats.size,
+          filename: fileName,
+          mimeType: this.getMimeType(fileExtension),
+          originalPath: filePath // 关键：传递文件路径
+        },
+        knowledgeBaseId: targetKnowledgeBase.id
+      };
+      
+      console.log(`开始上传文件到知识库: ${targetKnowledgeBase.name} (ID: ${targetKnowledgeBase.id})`);
+      
+      // 直接调用 FastGPT 客户端的导入方法
+      const result = await this.fastgptClient.importContent(importData);
+      
+      console.log(`文件 ${fileName} 上传结果:`, result);
+      
+      // 保存到历史记录
+      console.log('开始保存历史记录...');
+      const historyItem = {
+        id: Date.now().toString(),
+        content: `文件: ${fileName} (${stats.size} 字节)`,
+        type: 'file' as any,
+        source: 'file' as any,
+        timestamp: Date.now(),
+        metadata: {
+          ...importData.metadata,
+          knowledgeBaseName: targetKnowledgeBase.name
+        },
+        result
+      };
+      await this.historyManager.addItem(historyItem);
+      console.log('历史记录保存成功');
+      
+      // 显示通知
+      const settings = this.settingsManager.getSettings();
+      if (settings.general.enableNotifications) {
+        this.windowManager.showNotification(
+          result.success ? '文件上传成功' : '文件上传失败',
+          result.success 
+            ? `文件 ${fileName} 已上传到知识库: ${targetKnowledgeBase.name}` 
+            : (result.message || result.error || '文件上传失败')
+        );
+      }
       
     } catch (error) {
       console.error(`导入文件 ${filePath} 失败:`, error);
+      
+      // 显示错误通知
+      const settings = this.settingsManager.getSettings();
+      if (settings.general.enableNotifications) {
+        this.windowManager.showNotification(
+          '文件导入失败',
+          error instanceof Error ? error.message : '未知错误'
+        );
+      }
+      
       throw error;
+    }
+  }
+
+  private async importContentWithData(importData: any): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      console.log(`开始导入内容: 类型=${importData.type}, 来源=${importData.source}`);
+      console.log('导入数据详情:', {
+        type: importData.type,
+        hasMetadata: !!importData.metadata,
+        originalPath: importData.metadata?.originalPath,
+        contentPreview: importData.content.substring(0, 100)
+      });
+      
+      // 获取有写权限的知识库
+      const appSettings = this.settingsManager.getSettings();
+      console.log('FastGPT配置:', {
+        baseUrl: appSettings.fastgpt.baseUrl,
+        hasApiKey: !!appSettings.fastgpt.apiKey,
+        timeout: appSettings.fastgpt.timeout
+      });
+      
+      // 获取所有知识库并筛选有权限的
+      console.log('正在获取知识库列表...');
+      const allKnowledgeBases = await this.fastgptClient.getKnowledgeBases();
+      console.log(`获取到 ${allKnowledgeBases.length} 个知识库`);
+      
+      if (allKnowledgeBases.length === 0) {
+        throw new Error('没有可用的知识库');
+      }
+
+      // 查找有写权限的知识库
+      let writableKnowledgeBases = [];
+      console.log('开始检查知识库权限...');
+      
+      for (const kb of allKnowledgeBases) {
+        try {
+          console.log(`检查知识库权限: ${kb.name} (ID: ${kb.id})`);
+          const hasWritePermission = await this.fastgptClient.checkWritePermission(kb.id);
+          console.log(`知识库 ${kb.name} 权限检查结果: ${hasWritePermission}`);
+          
+          if (hasWritePermission) {
+            writableKnowledgeBases.push(kb);
+            console.log(`✓ 知识库 ${kb.name} 有写权限`);
+          } else {
+            console.log(`✗ 知识库 ${kb.name} 无写权限`);
+          }
+        } catch (error) {
+          console.warn(`检查知识库 ${kb.name} 权限失败:`, error);
+          continue;
+        }
+      }
+
+      console.log(`找到 ${writableKnowledgeBases.length} 个有写权限的知识库`);
+
+      if (writableKnowledgeBases.length === 0) {
+        throw new Error('没有找到具有写权限的知识库');
+      }
+
+      // 显示知识库选择对话框
+      const targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
+      if (!targetKnowledgeBase) {
+        console.log('用户取消了知识库选择');
+        throw new Error('用户取消了知识库选择');
+      }
+      console.log(`用户选择了知识库: ${targetKnowledgeBase.name}`);
+      
+      console.log(`开始调用FastGPT API导入内容到知识库: ${targetKnowledgeBase.name} (ID: ${targetKnowledgeBase.id})`);
+      
+      // 使用完整的 importData 对象，包含 originalPath
+      const fullImportData = {
+        ...importData,
+        knowledgeBaseId: targetKnowledgeBase.id
+      };
+      
+      const result = await this.fastgptClient.importContent(fullImportData);
+
+      console.log('导入结果:', result);
+
+      // 保存到历史记录
+      console.log('开始保存历史记录...');
+      const historyItem = {
+        id: Date.now().toString(),
+        content: importData.content,
+        type: importData.type,
+        source: importData.source,
+        timestamp: Date.now(),
+        metadata: {
+          ...importData.metadata,
+          knowledgeBaseName: targetKnowledgeBase.name
+        },
+        result
+      };
+      console.log('历史记录项:', historyItem);
+      await this.historyManager.addItem(historyItem);
+      console.log('历史记录保存成功');
+      
+      // 验证历史记录是否保存成功
+      const savedHistory = this.historyManager.getHistory();
+      console.log(`当前历史记录总数: ${savedHistory.length}`);
+      if (savedHistory.length > 0) {
+        console.log('最新历史记录:', savedHistory[0]);
+      }
+
+      // 显示通知 - 检查用户设置
+      if (appSettings.general.enableNotifications) {
+        this.windowManager.showNotification(
+          result.success ? '导入成功' : '导入失败',
+          result.success 
+            ? `已导入到知识库: ${targetKnowledgeBase.name}` 
+            : (result.message || result.error || '')
+        );
+      }
+      
+      return result;
+    } catch (error: any) {
+      console.error('导入内容失败:', error);
+      return {
+        success: false,
+        message: error.message || '导入失败',
+        error: error.message || '导入失败'
+      };
     }
   }
 
@@ -537,29 +768,36 @@ class DiaFastGPTApp {
 
   private getMimeType(extension: string): string {
     const mimeTypes: { [key: string]: string } = {
-      '.txt': 'text/plain',
-      '.md': 'text/markdown',
+      '.pdf': 'application/pdf',
       '.doc': 'application/msword',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.pdf': 'application/pdf',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.ppt': 'application/vnd.ms-powerpoint',
+      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.txt': 'text/plain',
+      '.md': 'text/markdown',
+      '.html': 'text/html',
+      '.css': 'text/css',
+      '.js': 'application/javascript',
+      '.ts': 'application/typescript',
+      '.json': 'application/json',
+      '.xml': 'application/xml',
+      '.csv': 'text/csv',
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
       '.png': 'image/png',
       '.gif': 'image/gif',
       '.bmp': 'image/bmp',
-      '.webp': 'image/webp',
-      '.js': 'text/javascript',
-      '.ts': 'text/typescript',
-      '.jsx': 'text/jsx',
-      '.tsx': 'text/tsx',
-      '.py': 'text/x-python',
-      '.java': 'text/x-java-source',
-      '.cpp': 'text/x-c++src',
-      '.c': 'text/x-csrc',
-      '.css': 'text/css',
-      '.html': 'text/html'
+      '.svg': 'image/svg+xml',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.mp4': 'video/mp4',
+      '.avi': 'video/x-msvideo',
+      '.zip': 'application/zip',
+      '.rar': 'application/x-rar-compressed',
+      '.7z': 'application/x-7z-compressed'
     };
-    
     return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
   }
 
@@ -652,28 +890,20 @@ class DiaFastGPTApp {
         const fileExtension = path.extname(filePath).toLowerCase();
         const stats = fs.statSync(filePath);
         
-        // 读取文件内容
-        let content = '';
-        if (['.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.css', '.html'].includes(fileExtension)) {
-          content = fs.readFileSync(filePath, 'utf8');
-        } else {
-          // 对于其他文件类型，暂时只记录文件信息
-          content = `文件名: ${fileName}\n文件大小: ${stats.size} 字节\n文件路径: ${filePath}`;
-        }
-        
-        // 构建导入数据
+        // 对于所有文件类型，都使用文件上传功能
+        // 构建导入数据，包含文件路径用于真正的文件上传
         const importData = {
-          content,
+          content: `文件名: ${fileName}\n文件大小: ${stats.size} 字节\n文件路径: ${filePath}`, // 临时内容，实际会被uploadFile方法忽略
           type: 'file' as any,
           source: 'file',
           metadata: {
             source: 'file' as any,
             type: 'file' as any,
             timestamp: Date.now(),
-            size: content.length,
+            size: stats.size, // 使用文件实际大小
             filename: fileName,
             mimeType: this.getMimeType(fileExtension),
-            originalPath: filePath
+            originalPath: filePath // 关键：确保传递文件路径
           },
           knowledgeBaseId
         };
@@ -696,7 +926,8 @@ class DiaFastGPTApp {
           
           return result;
         } else {
-          return await this.importContent(content, 'file');
+          // 传递完整的 importData 对象，保留 originalPath 信息
+          return await this.importContentWithData(importData);
         }
       } catch (error) {
         console.error('IPC文件导入失败:', error);

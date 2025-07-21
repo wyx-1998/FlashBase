@@ -46,6 +46,7 @@ export interface ContentMetadata {
   windowTitle?: string;
   url?: string;
   knowledgeBaseName?: string;  // 添加知识库名称字段
+  originalPath?: string;       // 添加原始文件路径字段
 }
 
 // 导入数据结构
@@ -71,6 +72,8 @@ export interface FileValidationResult {
   valid: boolean;
   error?: string;
   supportedFormats?: string[];
+  size?: number;
+  type?: string;
 }
 
 // FastGPT 配置

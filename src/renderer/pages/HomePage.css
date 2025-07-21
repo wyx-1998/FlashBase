@@ -541,6 +541,49 @@
   }
 }
 
+/* 文件拖拽样式 */
+.home-page.drag-over {
+  background: rgba(0, 122, 255, 0.05);
+  border: 2px dashed var(--apple-blue);
+  border-radius: var(--radius-lg);
+  position: relative;
+}
+
+.home-page.drag-over::before {
+  content: '📁 拖拽文件到此处导入';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 122, 255, 0.9);
+  color: white;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  font-size: 18px;
+  font-weight: 600;
+  z-index: 1000;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation: bounceIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .home-page {

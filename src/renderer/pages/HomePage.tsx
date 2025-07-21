@@ -152,7 +152,12 @@ const HomePage: React.FC = () => {
           }
           
           // 导入文件
-          const result = await electron.importFile({ filePath })
+          const result = await electron.importFile({ 
+            filePath,
+            fileName: filePath.split('/').pop() || 'unknown',
+            fileSize: validation.size || 0,
+            mimeType: validation.type || 'application/octet-stream'
+          })
           
           if (result && result.success) {
             setFileImportMessage({ 
@@ -199,8 +204,98 @@ const HomePage: React.FC = () => {
     }
   }
 
+  // 文件拖拽处理
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // 只有当离开整个拖拽区域时才设置为false
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false)
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+    
+    setFileImportMessage(null)
+    setIsLoading(true)
+    
+    try {
+      for (const file of files) {
+        try {
+          // 验证文件
+          const validation = await electron.validateFile(file.path)
+          if (!validation.valid) {
+            setFileImportMessage({ 
+              type: 'error', 
+              text: `文件验证失败: ${validation.error}` 
+            })
+            continue
+          }
+          
+          // 导入文件
+           const result = await electron.importFile({ 
+             filePath: file.path,
+             fileName: file.name,
+             fileSize: file.size,
+             mimeType: file.type || 'application/octet-stream'
+           })
+          
+          if (result && result.success) {
+            setFileImportMessage({ 
+              type: 'success', 
+              text: `文件导入成功: ${file.name}` 
+            })
+          } else {
+            const errorMessage = result?.error || '文件导入失败'
+            setFileImportMessage({ type: 'error', text: errorMessage })
+          }
+        } catch (error: any) {
+          console.error('文件导入异常:', error)
+          setFileImportMessage({ 
+            type: 'error', 
+            text: `文件导入失败: ${error.message || '未知错误'}` 
+          })
+        }
+      }
+    } catch (error: any) {
+      console.error('文件拖拽导入过程异常:', error)
+      setFileImportMessage({ 
+        type: 'error', 
+        text: `文件导入失败: ${error.message || '未知错误'}` 
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
-    <div className="home-page">
+    <div 
+      className={`home-page ${isDragOver ? 'drag-over' : ''}`}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="home-header">
         <h1>欢迎使用 FlashBase 桌面应用</h1>
         <p>通过系统级快捷键快速导入内容到您的知识库</p>
