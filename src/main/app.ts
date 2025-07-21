@@ -18,6 +18,7 @@ class DiaFastGPTApp {
   private fastgptClient: FastGPTClient;
   private settingsManager: SettingsManager;
   private historyManager: HistoryManager;
+  private isQuitting = false;
 
   constructor() {
     this.shortcutManager = new GlobalShortcutManager();
@@ -55,18 +56,40 @@ class DiaFastGPTApp {
     });
 
     app.on('window-all-closed', () => {
-      // 在 macOS 上，即使关闭所有窗口，应用也应该继续运行
-      if (process.platform !== 'darwin') {
-        app.quit();
+      // 在 macOS 上的特殊处理：保持应用运行但隐藏 Dock 图标
+      if (process.platform === 'darwin') {
+        // 不退出应用，只是隐藏 Dock 图标，应用继续在托盘中运行
+        console.log('All windows closed on macOS, hiding dock icon, app continues in tray');
+        app.dock?.hide();
+      } else {
+        // 在其他平台上，保持应用运行
+        console.log('All windows closed, app continues running in tray');
       }
     });
 
     app.on('activate', () => {
+      // macOS 特有事件：当用户点击 Dock 图标时触发
+      console.log('App activated (Dock icon clicked)');
+      
+      // 确保 Dock 图标可见
+      if (process.platform === 'darwin') {
+        app.dock?.show();
+      }
+      
+      // 显示主窗口
       this.windowManager.showMainWindow();
     });
 
     app.on('before-quit', () => {
+      this.isQuitting = true;
+      (app as any).isQuitting = true;
       this.onAppQuit();
+    });
+
+    app.on('will-quit', (event) => {
+      if (!this.isQuitting) {
+        event.preventDefault();
+      }
     });
 
     // 注册 IPC 处理器
@@ -80,6 +103,10 @@ class DiaFastGPTApp {
       
       // 初始化窗口管理器
       await this.windowManager.initialize();
+      
+      // 设置窗口管理器引用
+      this.trayManager.setWindowManager(this.windowManager);
+      this.trayManager.setAppInstance(this);
       
       // 显示主窗口
       this.windowManager.showMainWindow();
@@ -108,6 +135,15 @@ class DiaFastGPTApp {
         console.error('应用退出清理时发生错误:', error);
       }
     }
+  }
+
+  /**
+   * 强制退出应用
+   */
+  public forceQuit(): void {
+    this.isQuitting = true;
+    (app as any).isQuitting = true;
+    app.quit();
   }
 
   /**

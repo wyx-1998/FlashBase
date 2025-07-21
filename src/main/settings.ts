@@ -7,10 +7,10 @@ export class SettingsManager {
 
   constructor() {
     this.store = new Store<AppSettings>({
-      name: 'flashbase-settings',
+      name: 'flashbase-dev-settings',
       defaults: DEFAULT_SETTINGS,
       // 加密存储敏感信息
-      encryptionKey: 'flashbase-desktop-key',
+      encryptionKey: 'flashbase-dev-desktop-key',
       fileExtension: 'json'
     });
   }

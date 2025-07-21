@@ -6,6 +6,7 @@ import { APP_INFO } from '../shared/constants';
 export class TrayManager {
   private tray: Tray | null = null;
   private windowManager: WindowManager | null = null;
+  private appInstance: any = null;
 
   async initialize(): Promise<void> {
     try {
@@ -21,7 +22,26 @@ export class TrayManager {
       
       // 托盘点击事件
       this.tray.on('click', () => {
+        console.log('Tray clicked, showing main window');
+        
+        // 在 macOS 上先显示 Dock 图标
+        if (process.platform === 'darwin') {
+          app.dock?.show();
+          console.log('Dock icon shown');
+        }
+        
+        // 显示主窗口（内部已包含 Dock 图标处理）
         this.windowManager?.showMainWindow();
+        
+        // 额外确保窗口获得焦点
+        setTimeout(() => {
+          const mainWindow = this.windowManager?.getMainWindow();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.focus();
+            mainWindow.moveTop();
+            console.log('Main window focused and moved to top');
+          }
+        }, 100);
       });
 
       console.log('系统托盘初始化成功');
@@ -32,6 +52,10 @@ export class TrayManager {
 
   setWindowManager(windowManager: WindowManager): void {
     this.windowManager = windowManager;
+  }
+
+  setAppInstance(appInstance: any): void {
+    this.appInstance = appInstance;
   }
 
   private getIconPath(): string {
@@ -103,7 +127,11 @@ export class TrayManager {
       {
         label: '❌ 退出',
         click: () => {
-          app.quit();
+          if (this.appInstance && this.appInstance.forceQuit) {
+            this.appInstance.forceQuit();
+          } else {
+            app.quit();
+          }
         }
       }
     ]);

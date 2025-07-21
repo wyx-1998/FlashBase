@@ -34,8 +34,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // 应用信息
 export const APP_INFO = {
   name: 'FlashBase',
-  version: '1.1.0',
-  description: 'FlashBase - 闪电般的知识库管理工具，支持文件导入功能',
+  version: '1.1.1',
+  description: 'FlashBase - 智能知识库管理工具',
   homepage: 'https://github.com/wyx-1998/FlashBase'
 };
 

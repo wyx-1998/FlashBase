@@ -8,7 +8,7 @@ export class HistoryManager {
 
   constructor() {
     this.store = new Store<{ items: HistoryItem[] }>({
-      name: 'flashbase-history',
+      name: 'flashbase-dev-history',
       defaults: { items: [] },
       fileExtension: 'json'
     });

@@ -40,22 +40,112 @@ export class WindowManager {
       this.mainWindow.loadURL('http://localhost:5173');
       this.mainWindow.webContents.openDevTools();
     } else {
-      this.mainWindow.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+      // 修复打包后的路径问题
+      let rendererPath: string;
+      const fs = require('fs');
+      
+      // 检查是否在打包环境中
+      if (process.resourcesPath) {
+        // 打包后，renderer 文件在 extraResources 中，位于 app/Contents/Resources/renderer/
+        rendererPath = path.join(process.resourcesPath, 'renderer/index.html');
+      } else {
+        // 开发环境或未打包的情况
+        rendererPath = path.join(__dirname, '../../dist/renderer/index.html');
+      }
+      
+      console.log('Loading renderer from:', rendererPath);
+      console.log('Process resources path:', process.resourcesPath);
+      console.log('__dirname:', __dirname);
+      
+      // 检查文件是否存在
+      if (fs.existsSync(rendererPath)) {
+        this.mainWindow.loadFile(rendererPath);
+        console.log('Successfully loaded renderer from:', rendererPath);
+      } else {
+        console.error('Renderer file not found at:', rendererPath);
+        
+        // 尝试多个备用路径
+        const fallbackPaths = [
+          path.join(__dirname, '../../renderer/index.html'),
+          path.join(__dirname, '../renderer/index.html'),
+          path.join(process.cwd(), 'dist/renderer/index.html'),
+          path.join(process.cwd(), 'renderer/index.html')
+        ];
+        
+        let loaded = false;
+        for (const fallbackPath of fallbackPaths) {
+          console.log('Trying fallback path:', fallbackPath);
+          if (fs.existsSync(fallbackPath)) {
+            this.mainWindow.loadFile(fallbackPath);
+            console.log('Successfully loaded from fallback:', fallbackPath);
+            loaded = true;
+            break;
+          }
+        }
+        
+        if (!loaded) {
+          console.error('All renderer paths failed');
+          // 显示错误页面
+          this.mainWindow.loadURL(`data:text/html,<h1>Error: Renderer not found</h1><p>Attempted path: ${rendererPath}</p><p>Process resources: ${process.resourcesPath}</p><p>__dirname: ${__dirname}</p>`);
+        }
+      }
     }
 
     // 窗口事件处理
     this.mainWindow.on('ready-to-show', () => {
+      console.log('Main window ready to show');
       this.mainWindow?.show();
     });
+
+    // 添加加载失败处理
+    this.mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('Failed to load main window:', errorCode, errorDescription, validatedURL);
+      // 如果加载失败，仍然显示窗口以便调试
+      this.mainWindow?.show();
+    });
+
+    // 添加加载完成处理
+    this.mainWindow.webContents.on('did-finish-load', () => {
+      console.log('Main window finished loading');
+      // 确保窗口显示
+      if (!this.mainWindow?.isVisible()) {
+        this.mainWindow?.show();
+      }
+    });
+
+    // 添加超时显示机制
+    setTimeout(() => {
+      if (this.mainWindow && !this.mainWindow.isDestroyed() && !this.mainWindow.isVisible()) {
+        console.log('Force showing main window after timeout');
+        this.mainWindow.show();
+      }
+    }, 3000);
 
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
     });
 
-    // 阻止默认的关闭行为，改为隐藏到托盘
+    // 处理窗口关闭事件
     this.mainWindow.on('close', (event) => {
-      event.preventDefault();
-      this.mainWindow?.hide();
+      const { app } = require('electron');
+      console.log('Main window close event, isQuitting:', (app as any).isQuitting);
+      
+      // 检查是否正在退出应用
+      if (!(app as any).isQuitting) {
+        event.preventDefault();
+        this.mainWindow?.hide();
+        console.log('Main window hidden, app continues running in tray');
+        
+        // 在 macOS 上，确保应用不会意外退出
+        if (process.platform === 'darwin') {
+          // 防止应用在所有窗口关闭时退出
+          app.dock?.hide();
+        }
+      } else {
+        console.log('App is quitting, allowing window to close');
+        // 确保所有资源被正确清理
+        this.mainWindow?.webContents?.removeAllListeners();
+      }
     });
 
     return this.mainWindow;
@@ -67,10 +157,23 @@ export class WindowManager {
   showMainWindow(): void {
     if (!this.mainWindow) {
       this.createMainWindow();
+      // 新创建的窗口会通过 ready-to-show 事件自动显示
+      return;
     }
     
-    this.mainWindow?.show();
-    this.mainWindow?.focus();
+    // 如果窗口已存在，直接显示并聚焦
+    if (this.mainWindow.isMinimized()) {
+      this.mainWindow.restore();
+    }
+    
+    this.mainWindow.show();
+    this.mainWindow.focus();
+    
+    // 在 macOS 上确保 Dock 图标可见
+    if (process.platform === 'darwin') {
+      const { app } = require('electron');
+      app.dock?.show();
+    }
   }
 
   /**
@@ -99,7 +202,7 @@ export class WindowManager {
     if (process.env.NODE_ENV === 'development') {
       this.settingsWindow.loadURL('http://localhost:5173');
     } else {
-      this.settingsWindow.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+      this.settingsWindow.loadFile(path.join(process.resourcesPath, 'renderer/index.html'));
     }
 
     this.settingsWindow.on('ready-to-show', () => {
@@ -150,7 +253,7 @@ export class WindowManager {
     if (process.env.NODE_ENV === 'development') {
       this.historyWindow.loadURL('http://localhost:5173');
     } else {
-      this.historyWindow.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+      this.historyWindow.loadFile(path.join(process.resourcesPath, 'renderer/index.html'));
     }
 
     this.historyWindow.on('ready-to-show', () => {
@@ -212,7 +315,7 @@ export class WindowManager {
     if (process.env.NODE_ENV === 'development') {
       this.quickPanel.loadURL('http://localhost:5173');
     } else {
-      this.quickPanel.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+      this.quickPanel.loadFile(path.join(process.resourcesPath, 'renderer/index.html'));
     }
 
     this.quickPanel.on('ready-to-show', () => {

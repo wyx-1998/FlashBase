@@ -232,6 +232,19 @@ const SettingsPage: React.FC = () => {
                 
                 <div className="shortcut-item">
                   <div className="shortcut-info">
+                    <strong>文件导入</strong>
+                    <small>选择文件导入到知识库</small>
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.shortcuts.fileImport}
+                    onChange={(e) => handleInputChange('shortcuts.fileImport', e.target.value)}
+                    placeholder="Ctrl+Shift+F"
+                  />
+                </div>
+                
+                <div className="shortcut-item">
+                  <div className="shortcut-info">
                     <strong>显示面板</strong>
                     <small>显示快速操作面板</small>
                   </div>

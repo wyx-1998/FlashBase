@@ -2,11 +2,11 @@
 
 一个跨平台的桌面应用，为 FastGPT 知识库提供系统级快捷键支持，闪电般的知识管理体验。
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/wyx-1998/FlashBase/releases)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/wyx-1998/FlashBase/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#)
 
-> 🚀 **最新版本 v1.1.0** 新增文件导入功能和历史记录筛选，支持拖拽上传多种文档格式！
+> 🚀 **最新版本 v1.1.1** 完善文件导入快捷键配置，优化托盘交互体验，提升系统稳定性！
 
 ## ✨ 功能特性
 
