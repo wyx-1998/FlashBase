@@ -25,6 +25,7 @@ const electronAPI = {
   
   // FastGPT API
   testConnection: () => ipcRenderer.invoke('test-fastgpt-connection'),
+  testAIConnection: (config: any) => ipcRenderer.invoke('test-ai-connection', config),
   getKnowledgeBases: () => ipcRenderer.invoke('get-knowledge-bases'),
   importContent: (data: any) => ipcRenderer.invoke('import-content', data),
   

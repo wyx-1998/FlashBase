@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppSettings, HistoryItem, KnowledgeBase, ImportData, ImportResult, ClipboardContent, FileImportData, FileValidationResult } from '../../shared/types'
+import type { AppSettings, HistoryItem, KnowledgeBase, ImportData, ImportResult, ClipboardContent, FileImportData, FileValidationResult, AIConfig } from '../../shared/types'
 
 export const useElectron = () => {
   // 获取设置
@@ -67,6 +67,16 @@ export const useElectron = () => {
     }
   }, [])
 
+  // 测试AI模型连接
+  const testAIConnection = useCallback(async (config: AIConfig): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const result = await window.electronAPI?.testAIConnection(config)
+      return result || { success: false, message: 'AI连接失败' }
+    } catch (error) {
+      return { success: false, message: `AI连接失败: ${error}` }
+    }
+  }, [])
+
   // 显示通知
   const showNotification = useCallback((title: string, body: string) => {
     // 使用 Electron 系统级通知
@@ -96,6 +106,7 @@ export const useElectron = () => {
     importFile,
     // takeScreenshot,  // 截图功能已移除
     testConnection,
+    testAIConnection,
     showNotification,
     quitApp,
     openExternal

@@ -17,6 +17,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
     apiKey: '',
     timeout: 10000
   },
+  ai: {
+    baseUrl: '',
+    apiKey: '',
+    model: 'gpt-3.5-turbo',
+    timeout: 30000
+  },
   shortcuts: DEFAULT_SHORTCUTS,
   general: {
     autoStart: false,

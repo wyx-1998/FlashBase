@@ -80,7 +80,15 @@ export interface FileValidationResult {
 export interface FastGPTConfig {
   baseUrl: string;
   apiKey: string;
-  timeout?: number;
+  timeout: number;
+}
+
+// AI 模型配置
+export interface AIConfig {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  timeout: number;
 }
 
 // 知识库信息
@@ -96,6 +104,21 @@ export interface ImportResult {
   success: boolean;
   insertId?: string;
   message?: string;
+  error?: string;
+}
+
+// AI 匹配结果
+export interface AIMatchResult {
+  knowledgeBaseId: string;
+  knowledgeBaseName: string;
+  confidence: number;
+  reason: string;
+}
+
+// AI 匹配响应
+export interface AIMatchResponse {
+  success: boolean;
+  matches?: AIMatchResult[];
   error?: string;
 }
 
@@ -126,6 +149,7 @@ export interface WindowInfo {
 // 应用设置
 export interface AppSettings {
   fastgpt: FastGPTConfig;
+  ai: AIConfig;
   shortcuts: ShortcutConfig;
   general: {
     autoStart: boolean;
@@ -172,9 +196,13 @@ export enum IPCChannel {
   GET_KNOWLEDGE_BASES = 'get-knowledge-bases',
   IMPORT_CONTENT = 'import-content',
   
+  // AI 智能匹配
+  AI_MATCH_KNOWLEDGE_BASE = 'ai-match-knowledge-base',
+  
   // 设置管理
   GET_SETTINGS = 'get-settings',
   SAVE_SETTINGS = 'save-settings',
+  TEST_AI_CONNECTION = 'test-ai-connection',
   
   // 历史记录
   GET_HISTORY = 'get-history',

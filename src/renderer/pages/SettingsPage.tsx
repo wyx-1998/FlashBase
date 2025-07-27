@@ -10,6 +10,8 @@ const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState('fastgpt')
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
+  const [isTestingAIConnection, setIsTestingAIConnection] = useState(false)
   
   const electron = useElectron()
   const { showNotification } = electron
@@ -50,19 +52,63 @@ const SettingsPage: React.FC = () => {
   }
 
   const testConnection = async () => {
+    if (!settings.fastgpt.baseUrl || !settings.fastgpt.apiKey) {
+      setMessage({ type: 'error', text: '请先填写 FastGPT 配置信息' })
+      return
+    }
+
+    setIsTestingConnection(true)
     setMessage(null)
     try {
-      // 先保存当前设置，确保测试连接使用最新配置
-      await electron.saveSettings(settings)
-      
-      // 然后测试连接
-      const result = await electron.testConnection()
+      const response = await fetch(`${settings.fastgpt.baseUrl}/api/core/dataset/list`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${settings.fastgpt.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        signal: AbortSignal.timeout(settings.fastgpt.timeout)
+      })
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'FastGPT 连接测试成功！' })
+      } else {
+        setMessage({ type: 'error', text: `连接失败: ${response.status} ${response.statusText}` })
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error)
+      if (error instanceof Error) {
+        if (error.name === 'TimeoutError') {
+          setMessage({ type: 'error', text: '连接超时，请检查网络或增加超时时间' })
+        } else {
+          setMessage({ type: 'error', text: `连接失败: ${error.message}` })
+        }
+      } else {
+        setMessage({ type: 'error', text: '连接失败，请检查配置' })
+      }
+    } finally {
+      setIsTestingConnection(false)
+    }
+  }
+
+  const testAIConnection = async () => {
+    if (!settings.ai?.baseUrl || !settings.ai?.apiKey) {
+      setMessage({ type: 'error', text: '请先填写 AI 模型配置信息' })
+      return
+    }
+
+    setIsTestingAIConnection(true)
+    setMessage(null)
+    try {
+      // 测试连接
+      const result = await electron.testAIConnection(settings.ai)
       setMessage({ 
         type: result.success ? 'success' : 'error', 
         text: result.message || '测试完成' 
       })
     } catch (error) {
-      setMessage({ type: 'error', text: '连接测试失败' })
+      setMessage({ type: 'error', text: 'AI连接测试失败' })
+    } finally {
+      setIsTestingAIConnection(false)
     }
   }
 
@@ -88,6 +134,7 @@ const SettingsPage: React.FC = () => {
 
   const tabs = [
     { id: 'fastgpt', label: 'FastGPT 配置', icon: '🤖' },
+    { id: 'aimodel', label: 'AI 模型配置', icon: '🧠' },
     { id: 'shortcuts', label: '快捷键设置', icon: '⌨️' },
     { id: 'general', label: '常规设置', icon: '⚙️' },
     { id: 'advanced', label: '高级设置', icon: '🔧' }
@@ -163,8 +210,79 @@ const SettingsPage: React.FC = () => {
               </div>
               
               <div className="form-actions">
-                <button onClick={testConnection} className="test-button">
-                  测试连接
+                <button 
+                  onClick={testConnection} 
+                  disabled={isTestingConnection || !settings.fastgpt.baseUrl || !settings.fastgpt.apiKey}
+                  className="test-button"
+                >
+                  {isTestingConnection ? '测试中...' : '测试连接'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'aimodel' && (
+            <div className="tab-panel">
+              <h2>AI 模型配置</h2>
+              <p>配置用于智能知识库选择的 AI 模型服务</p>
+              
+              <div className="form-group">
+                <label htmlFor="aiBaseUrl">API 地址</label>
+                <input
+                  id="aiBaseUrl"
+                  type="url"
+                  value={settings.ai?.baseUrl || ''}
+                  onChange={(e) => handleInputChange('ai.baseUrl', e.target.value)}
+                  placeholder="https://api.openai.com"
+                />
+                <small>AI 模型服务的 API 地址（支持带/v1或不带/v1的地址，如：https://api.openai.com 或 https://api.openai.com/v1）</small>
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="aiApiKey">API 密钥</label>
+                <input
+                  id="aiApiKey"
+                  type="password"
+                  value={settings.ai?.apiKey || ''}
+                  onChange={(e) => handleInputChange('ai.apiKey', e.target.value)}
+                  placeholder="sk-..."
+                />
+                <small>AI 模型服务的 API 密钥</small>
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="aiModel">模型名称</label>
+                <input
+                  id="aiModel"
+                  type="text"
+                  value={settings.ai?.model || ''}
+                  onChange={(e) => handleInputChange('ai.model', e.target.value)}
+                  placeholder="gpt-3.5-turbo"
+                />
+                <small>要使用的 AI 模型名称</small>
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="aiTimeout">超时时间 (毫秒)</label>
+                <input
+                  id="aiTimeout"
+                  type="number"
+                  value={settings.ai?.timeout || 30000}
+                  onChange={(e) => handleInputChange('ai.timeout', parseInt(e.target.value))}
+                  min="1000"
+                  max="60000"
+                  step="1000"
+                />
+                <small>API 请求的超时时间，默认 30 秒</small>
+              </div>
+              
+              <div className="form-actions">
+                <button 
+                  onClick={testAIConnection} 
+                  disabled={isTestingAIConnection || !settings.ai?.baseUrl || !settings.ai?.apiKey}
+                  className="test-button"
+                >
+                  {isTestingAIConnection ? '测试中...' : '测试连接'}
                 </button>
               </div>
             </div>

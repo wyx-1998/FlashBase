@@ -2,16 +2,16 @@
 
 欢迎来到 FlashBase 项目文档！这里包含了项目的完整文档和开发指南。
 
-> 🚀 **当前版本**: v1.1.0 | **状态**: 已发布 | **平台**: macOS (Windows/Linux 即将支持)
+> 🚀 **当前版本**: v2.0.0 | **状态**: 已发布 | **平台**: macOS (Windows/Linux 即将支持)
 
 ## 📚 文档概览
 
 ### 🚀 快速开始
-- [项目状态](PROJECT_STATUS.md) - v1.1.0发布状态和下一版本规划
+- [项目状态](PROJECT_STATUS.md) - v2.0.0发布状态和下一版本规划
 - [项目结构](PROJECT_STRUCTURE.md) - 详细的项目架构说明
 - [开发指南](DEVELOPMENT_GUIDE.md) - 完整的开发环境配置和开发流程
 - [版本更新日志](../CHANGELOG.md) - 详细的版本更新记录
-- [发布说明](../RELEASE_NOTES.md) - v1.1.0版本发布说明
+- [发布说明](../RELEASE_NOTES.md) - v2.0.0版本发布说明
 
 ### 🔧 开发文档
 - **[DEVELOPMENT.md](./DEVELOPMENT.md)** - 详细的开发指南，包含架构设计和开发规范
@@ -25,14 +25,14 @@
 ## 📖 文档使用指南
 
 ### 新手开发者
-1. 先阅读 [项目状态](PROJECT_STATUS.md) 了解项目现状和v1.1.0功能
+1. 先阅读 [项目状态](PROJECT_STATUS.md) 了解项目现状和v2.0.0功能
 2. 查看 [项目结构](PROJECT_STRUCTURE.md) 理解代码组织
 3. 按照 [开发指南](DEVELOPMENT_GUIDE.md) 配置开发环境
 4. 参考 [开发文档](DEVELOPMENT.md) 开始编码
 5. 查看 [版本更新日志](../CHANGELOG.md) 了解最新变更
 
 ### 用户和测试者
-1. 查看 [发布说明](../RELEASE_NOTES.md) 了解v1.1.0新功能
+1. 查看 [发布说明](../RELEASE_NOTES.md) 了解v2.0.0新功能
 2. 下载最新的 [GitHub Releases](https://github.com/wyx-1998/FlashBase/releases) 安装包
 3. 参考主项目 [README](../README.md) 了解使用方法
 

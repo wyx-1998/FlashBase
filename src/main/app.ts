@@ -7,7 +7,8 @@ import { ContentExtractor } from './content';
 import { FastGPTClient } from './api/fastgpt';
 import { SettingsManager } from './settings';
 import { HistoryManager } from './history';
-import { IPCChannel, ShortcutAction } from '../shared/types';
+import { AIKnowledgeBaseMatcher } from './ai-matcher';
+import { IPCChannel, ShortcutAction, ContentType, ContentSource } from '../shared/types';
 import { APP_INFO } from '../shared/constants';
 
 class DiaFastGPTApp {
@@ -16,6 +17,7 @@ class DiaFastGPTApp {
   private windowManager: WindowManager;
   private contentExtractor: ContentExtractor;
   private fastgptClient: FastGPTClient;
+  private aiMatcher: AIKnowledgeBaseMatcher;
   private settingsManager: SettingsManager;
   private historyManager: HistoryManager;
   private isQuitting = false;
@@ -28,9 +30,10 @@ class DiaFastGPTApp {
     this.settingsManager = new SettingsManager();
     this.historyManager = new HistoryManager();
     
-    // 初始化 FastGPT 客户端
+    // 初始化 FastGPT 客户端和AI匹配器
     const settings = this.settingsManager.getSettings();
     this.fastgptClient = new FastGPTClient(settings.fastgpt);
+    this.aiMatcher = new AIKnowledgeBaseMatcher(settings.ai);
     
     this.initializeApp();
   }
@@ -178,6 +181,303 @@ class DiaFastGPTApp {
     return knowledgeBases[result.response];
   }
 
+  /**
+   * 显示AI推荐对话框
+   */
+  private async showAIRecommendationDialog(matchResult: any, knowledgeBases: any[]): Promise<any | null> {
+    const { dialog } = require('electron');
+    
+    const recommendations = matchResult.recommendations || [];
+    const highConfidenceRecs = recommendations.filter((rec: any) => rec.confidence >= 70);
+    
+    let message = `AI智能分析结果:\n\n`;
+    
+    if (highConfidenceRecs.length > 1) {
+      message += `发现 ${highConfidenceRecs.length} 个高置信度推荐(≥70%):\n\n`;
+    } else if (highConfidenceRecs.length === 1) {
+      message += `推荐知识库:\n\n`;
+    } else {
+      message += `所有推荐置信度较低(<70%)，需要人工审核:\n\n`;
+    }
+    
+    // 显示推荐列表
+    recommendations.forEach((rec: any, index: number) => {
+      const indicator = rec.confidence >= 70 ? '🟢' : '🟡';
+      message += `${indicator} ${rec.knowledgeBase} (${rec.confidence}%)\n`;
+      message += `   理由: ${rec.reason}\n\n`;
+    });
+    
+    // 构建按钮选项
+    const buttons: string[] = [];
+    const buttonActions: string[] = [];
+    
+    if (highConfidenceRecs.length > 1) {
+      // 多个高置信度推荐时，提供批量导入选项
+      buttons.push(`批量导入所有高置信度推荐(${highConfidenceRecs.length}个)`);
+      buttonActions.push('batch');
+      
+      message += `\n选择操作:\n`;
+      message += `• 批量导入: 同时导入到所有高置信度推荐的知识库\n`;
+      message += `• 单个导入: 选择一个知识库进行导入\n`;
+    }
+    
+    // 添加单个知识库选项
+    recommendations.forEach((rec: any) => {
+      const kb = knowledgeBases.find((k: any) => k.name === rec.knowledgeBase);
+      if (kb) {
+        buttons.push(`导入到: ${rec.knowledgeBase}`);
+        buttonActions.push('import');
+      }
+    });
+    
+    buttons.push('取消');
+    buttonActions.push('cancel');
+    
+    const result = await dialog.showMessageBox(this.windowManager.getMainWindow()!, {
+      type: 'question',
+      title: 'AI智能推荐',
+      message: message,
+      buttons: buttons,
+      defaultId: 0,
+      cancelId: buttons.length - 1,
+      alwaysOnTop: true
+    });
+    
+    const action = buttonActions[result.response];
+    
+    if (action === 'cancel') {
+      return null;
+    } else if (action === 'batch') {
+      // 返回批量导入信息
+      const targetKnowledgeBases = highConfidenceRecs.map((rec: any) => 
+        knowledgeBases.find((kb: any) => kb.name === rec.knowledgeBase)
+      ).filter((kb: any) => kb);
+      
+      return {
+        action: 'batch',
+        knowledgeBases: targetKnowledgeBases
+      };
+    } else if (action === 'import') {
+      // 计算选择的知识库索引（减去批量导入按钮的偏移）
+      const kbIndex = highConfidenceRecs.length > 1 ? result.response - 1 : result.response;
+      const selectedRec = recommendations[kbIndex];
+      const targetKnowledgeBase = knowledgeBases.find((kb: any) => kb.name === selectedRec.knowledgeBase);
+      
+      return {
+        action: 'import',
+        knowledgeBase: targetKnowledgeBase
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * 执行批量导入操作
+   */
+  private async performBatchImport(
+    content: string,
+    source: string,
+    targetKnowledgeBases: any[],
+    matchResult?: any
+  ): Promise<{ success: boolean; message?: string; error?: string; results?: any[] }> {
+    try {
+      console.log(`开始执行批量导入: 目标知识库数量=${targetKnowledgeBases.length}`);
+      console.log('目标知识库:', targetKnowledgeBases.map(kb => kb.name));
+      
+      const results = [];
+      const successCount = { count: 0 };
+      const failureCount = { count: 0 };
+      
+      // 并行导入到所有目标知识库
+      const importPromises = targetKnowledgeBases.map(async (kb) => {
+        try {
+          const importData = {
+            content: content,
+            type: source === 'file' ? ContentType.FILE : ContentType.TEXT,
+            source: source,
+            metadata: {
+              source: source === 'file' ? ContentSource.FILE : ContentSource.CLIPBOARD,
+              type: source === 'file' ? ContentType.FILE : ContentType.TEXT,
+              timestamp: Date.now(),
+              size: content.length,
+              knowledgeBaseName: kb.name,
+              importType: 'ai-batch',
+              aiMatchResult: matchResult
+            },
+            knowledgeBaseId: kb.id
+          };
+          
+          const result = await this.fastgptClient.importContent(importData);
+          console.log(`导入到 ${kb.name} 的结果:`, result);
+          
+          if (result.success) {
+            successCount.count++;
+          } else {
+            failureCount.count++;
+          }
+          
+          return {
+            knowledgeBase: kb,
+            result: result
+          };
+        } catch (error: any) {
+          console.error(`导入到 ${kb.name} 失败:`, error);
+          failureCount.count++;
+          return {
+            knowledgeBase: kb,
+            result: {
+              success: false,
+              error: error.message || '导入失败'
+            }
+          };
+        }
+      });
+      
+      const importResults = await Promise.all(importPromises);
+      results.push(...importResults);
+      
+      // 保存批量导入历史记录
+      const historyItem = {
+        id: Date.now().toString(),
+        content: content,
+        type: (source === 'file' ? ContentType.FILE : ContentType.TEXT) as any,
+        source: source as any,
+        timestamp: Date.now(),
+        metadata: {
+          source: (source === 'file' ? ContentSource.FILE : ContentSource.CLIPBOARD) as any,
+          type: (source === 'file' ? ContentType.FILE : ContentType.TEXT) as any,
+          timestamp: Date.now(),
+          size: content.length,
+          knowledgeBaseName: targetKnowledgeBases.map(kb => kb.name).join(', '),
+          importType: 'ai-batch',
+          aiMatchResult: matchResult,
+          batchResults: results
+        },
+        result: {
+          success: successCount.count > 0,
+          message: `批量导入完成: 成功 ${successCount.count}/${targetKnowledgeBases.length}`,
+          batchResults: results
+        }
+      };
+      await this.historyManager.addItem(historyItem);
+      
+      // 显示通知
+      const appSettings = this.settingsManager.getSettings();
+      if (appSettings.general.enableNotifications) {
+        let notificationTitle = '批量导入完成';
+        let notificationMessage = '';
+        
+        if (failureCount.count === 0) {
+          notificationMessage = `成功导入到 ${successCount.count} 个知识库: ${targetKnowledgeBases.map(kb => kb.name).join(', ')}`;
+        } else if (successCount.count === 0) {
+          notificationTitle = '批量导入失败';
+          notificationMessage = `所有 ${targetKnowledgeBases.length} 个知识库导入均失败`;
+        } else {
+          notificationMessage = `部分成功: ${successCount.count}/${targetKnowledgeBases.length} 个知识库导入成功`;
+        }
+        
+        this.windowManager.showNotification(notificationTitle, notificationMessage);
+      }
+      
+      return {
+        success: successCount.count > 0,
+        message: `批量导入完成: 成功 ${successCount.count}/${targetKnowledgeBases.length}`,
+        results: results
+      };
+      
+    } catch (error: any) {
+      console.error('执行批量导入失败:', error);
+      return {
+        success: false,
+        message: error.message || '批量导入失败',
+        error: error.message || '批量导入失败'
+      };
+    }
+  }
+
+  /**
+   * 执行导入操作
+   */
+  private async performImport(
+    content: string, 
+    source: string, 
+    targetKnowledgeBase: any, 
+    importType: 'manual' | 'ai-auto' | 'ai-manual',
+    matchResult?: any
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      console.log(`开始执行导入: 类型=${importType}, 目标知识库=${targetKnowledgeBase.name}`);
+      
+      // 构建导入数据
+      const importData = {
+        content: content,
+        type: source === 'file' ? ContentType.FILE : ContentType.TEXT,
+        source: source,
+        metadata: {
+            source: source === 'file' ? ContentSource.FILE : ContentSource.CLIPBOARD,
+            type: source === 'file' ? ContentType.FILE : ContentType.TEXT,
+            timestamp: Date.now(),
+            size: content.length,
+            knowledgeBaseName: targetKnowledgeBase.name,
+            importType: importType,
+            aiMatchResult: matchResult
+          },
+        knowledgeBaseId: targetKnowledgeBase.id
+      };
+      
+      // 调用FastGPT API导入
+      const result = await this.fastgptClient.importContent(importData);
+      console.log('导入结果:', result);
+      
+      // 保存到历史记录
+      const historyItem = {
+        id: Date.now().toString(),
+        content: content,
+        type: importData.type as any,
+        source: importData.source as any,
+        timestamp: Date.now(),
+        metadata: importData.metadata,
+        result
+      };
+      await this.historyManager.addItem(historyItem);
+      
+      // 显示通知
+      const appSettings = this.settingsManager.getSettings();
+      if (appSettings.general.enableNotifications) {
+        let notificationTitle = result.success ? '导入成功' : '导入失败';
+        let notificationMessage = '';
+        
+        if (result.success) {
+          switch (importType) {
+            case 'ai-auto':
+              notificationMessage = `AI自动导入到: ${targetKnowledgeBase.name} (置信度: ${matchResult?.finalChoice?.confidence}%)`;
+              break;
+            case 'ai-manual':
+              notificationMessage = `AI推荐导入到: ${targetKnowledgeBase.name}`;
+              break;
+            default:
+              notificationMessage = `已导入到知识库: ${targetKnowledgeBase.name}`;
+          }
+        } else {
+          notificationMessage = result.message || result.error || '导入失败';
+        }
+        
+        this.windowManager.showNotification(notificationTitle, notificationMessage);
+      }
+      
+      return result;
+      
+    } catch (error: any) {
+      console.error('执行导入失败:', error);
+      return {
+        success: false,
+        message: error.message || '导入失败',
+        error: error.message || '导入失败'
+      };
+    }
+  }
+
   private async registerGlobalShortcuts(): Promise<void> {
     const settings = this.settingsManager.getSettings();
     let shortcuts = settings.shortcuts;
@@ -286,12 +586,20 @@ class DiaFastGPTApp {
   // }
 
   private async handleClipboardImport(): Promise<void> {
-    // 剪贴板导入：直接导入剪贴板内容
+    // 剪贴板导入：使用AI智能导入剪贴板内容
     const clipboardContent = await this.contentExtractor.getClipboardContent();
     if (clipboardContent.text) {
+      // 显示AI分析开始通知
+      const settings = this.settingsManager.getSettings();
+      if (settings.general.enableNotifications) {
+        this.windowManager.showNotification(
+          'AI智能分析',
+          '正在分析剪贴板内容，匹配最适合的知识库...'
+        );
+      }
+      
       const result = await this.importContent(clipboardContent.text, 'clipboard');
-      // 快捷键导入的结果已经在importContent内部处理了通知，这里不需要额外处理
-      console.log('快捷键导入结果:', result);
+      console.log('AI智能导入结果:', result);
     }
   }
 
@@ -335,115 +643,41 @@ class DiaFastGPTApp {
       const fileExtension = path.extname(filePath).toLowerCase();
       const stats = fs.statSync(filePath);
       
-      console.log(`开始处理文件: ${fileName}, 扩展名: ${fileExtension}, 大小: ${stats.size} 字节`);
+      console.log(`开始AI智能处理文件: ${fileName}, 扩展名: ${fileExtension}, 大小: ${stats.size} 字节`);
       
-      // 获取有写权限的知识库
-      const appSettings = this.settingsManager.getSettings();
-      console.log('FastGPT配置:', {
-        baseUrl: appSettings.fastgpt.baseUrl,
-        hasApiKey: !!appSettings.fastgpt.apiKey,
-        timeout: appSettings.fastgpt.timeout
-      });
-      
-      // 获取所有知识库并筛选有权限的
-      console.log('正在获取知识库列表...');
-      const allKnowledgeBases = await this.fastgptClient.getKnowledgeBases();
-      console.log(`获取到 ${allKnowledgeBases.length} 个知识库`);
-      
-      if (allKnowledgeBases.length === 0) {
-        throw new Error('没有可用的知识库');
-      }
-
-      // 查找有写权限的知识库
-      let writableKnowledgeBases = [];
-      console.log('开始检查知识库权限...');
-      
-      for (const kb of allKnowledgeBases) {
-        try {
-          console.log(`检查知识库权限: ${kb.name} (ID: ${kb.id})`);
-          const hasWritePermission = await this.fastgptClient.checkWritePermission(kb.id);
-          console.log(`知识库 ${kb.name} 权限检查结果: ${hasWritePermission}`);
-          
-          if (hasWritePermission) {
-            writableKnowledgeBases.push(kb);
-            console.log(`✓ 知识库 ${kb.name} 有写权限`);
-          } else {
-            console.log(`✗ 知识库 ${kb.name} 无写权限`);
-          }
-        } catch (error) {
-          console.warn(`检查知识库 ${kb.name} 权限失败:`, error);
-          continue;
+      // 读取文件内容用于AI分析
+      let fileContent = '';
+      try {
+        // 对于文本文件，读取内容进行AI分析
+        if (['.txt', '.md', '.js', '.ts', '.py', '.java', '.cpp', '.c', '.css', '.html', '.json', '.xml'].includes(fileExtension)) {
+          fileContent = fs.readFileSync(filePath, 'utf8');
+          console.log(`读取文本文件内容，长度: ${fileContent.length}`);
+        } else {
+          // 对于其他文件类型，使用文件名和基本信息作为分析内容
+          fileContent = `文件名: ${fileName}\n文件类型: ${fileExtension}\n文件大小: ${stats.size} 字节`;
+          console.log('非文本文件，使用文件信息作为分析内容');
         }
+      } catch (readError) {
+        console.warn('读取文件内容失败，使用文件信息:', readError);
+        fileContent = `文件名: ${fileName}\n文件类型: ${fileExtension}\n文件大小: ${stats.size} 字节`;
       }
-
-      console.log(`找到 ${writableKnowledgeBases.length} 个有写权限的知识库`);
-
-      if (writableKnowledgeBases.length === 0) {
-        throw new Error('没有找到具有写权限的知识库');
-      }
-
-      // 显示知识库选择对话框
-      const targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
-      if (!targetKnowledgeBase) {
-        console.log('用户取消了知识库选择');
-        throw new Error('用户取消了知识库选择');
-      }
-      console.log(`用户选择了知识库: ${targetKnowledgeBase.name}`);
       
-      // 构建导入数据，包含文件路径信息
-      const importData = {
-        content: `文件: ${fileName}`, // 简单的内容描述
-        type: 'file' as any,
-        source: 'file',
-        metadata: {
-          source: 'file' as any,
-          type: 'file' as any,
-          timestamp: Date.now(),
-          size: stats.size,
-          filename: fileName,
-          mimeType: this.getMimeType(fileExtension),
-          originalPath: filePath // 关键：传递文件路径
-        },
-        knowledgeBaseId: targetKnowledgeBase.id
-      };
-      
-      console.log(`开始上传文件到知识库: ${targetKnowledgeBase.name} (ID: ${targetKnowledgeBase.id})`);
-      
-      // 直接调用 FastGPT 客户端的导入方法
-      const result = await this.fastgptClient.importContent(importData);
-      
-      console.log(`文件 ${fileName} 上传结果:`, result);
-      
-      // 保存到历史记录
-      console.log('开始保存历史记录...');
-      const historyItem = {
-        id: Date.now().toString(),
-        content: `文件: ${fileName} (${stats.size} 字节)`,
-        type: 'file' as any,
-        source: 'file' as any,
-        timestamp: Date.now(),
-        metadata: {
-          ...importData.metadata,
-          knowledgeBaseName: targetKnowledgeBase.name
-        },
-        result
-      };
-      await this.historyManager.addItem(historyItem);
-      console.log('历史记录保存成功');
-      
-      // 显示通知
+      // 显示AI分析开始通知
       const settings = this.settingsManager.getSettings();
       if (settings.general.enableNotifications) {
         this.windowManager.showNotification(
-          result.success ? '文件上传成功' : '文件上传失败',
-          result.success 
-            ? `文件 ${fileName} 已上传到知识库: ${targetKnowledgeBase.name}` 
-            : (result.message || result.error || '文件上传失败')
+          'AI智能分析',
+          `正在分析文件 ${fileName}，匹配最适合的知识库...`
         );
       }
       
+      // 使用AI智能导入
+      const result = await this.importContent(fileContent, 'file');
+      
+      console.log(`文件 ${fileName} AI智能导入结果:`, result);
+      
     } catch (error) {
-      console.error(`导入文件 ${filePath} 失败:`, error);
+      console.error(`AI智能导入文件 ${filePath} 失败:`, error);
       
       // 显示错误通知
       const settings = this.settingsManager.getSettings();
@@ -579,20 +813,16 @@ class DiaFastGPTApp {
     }
   }
 
+
+
   private async importContent(content: string, source: string): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-      console.log(`开始导入内容: 来源=${source}, 长度=${content.length}`);
-      
-      // 根据来源确定内容类型
-      const contentType = source === 'file' ? 'file' : 'text';
+      console.log(`=== 开始AI智能导入 ===`);
+      console.log(`内容来源: ${source}, 内容长度: ${content.length}`);
       
       // 获取有写权限的知识库
       const appSettings = this.settingsManager.getSettings();
-      console.log('FastGPT配置:', {
-        baseUrl: appSettings.fastgpt.baseUrl,
-        hasApiKey: !!appSettings.fastgpt.apiKey,
-        timeout: appSettings.fastgpt.timeout
-      });
+      console.log('获取应用设置完成');
       
       // 获取所有知识库并筛选有权限的
       console.log('正在获取知识库列表...');
@@ -602,11 +832,6 @@ class DiaFastGPTApp {
       if (allKnowledgeBases.length === 0) {
         throw new Error('没有可用的知识库');
       }
-
-      // 打印所有知识库信息
-      allKnowledgeBases.forEach((kb, index) => {
-        console.log(`知识库 ${index + 1}: ${kb.name} (ID: ${kb.id})`);
-      });
 
       // 查找有写权限的知识库
       let writableKnowledgeBases = [];
@@ -636,83 +861,136 @@ class DiaFastGPTApp {
         throw new Error('没有找到具有写权限的知识库');
       }
 
-      // 总是显示知识库选择对话框，让用户确认选择
+      // 使用AI智能匹配知识库
       let targetKnowledgeBase = null;
+      let matchResult = null;
       
-      // 显示知识库选择对话框
-      targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
-      if (!targetKnowledgeBase) {
-        console.log('用户取消了知识库选择');
-        throw new Error('用户取消了知识库选择');
-      }
-      console.log(`用户选择了知识库: ${targetKnowledgeBase.name}`);
+      // 检查AI配置是否完整
+      const allSettings = this.settingsManager.getSettings();
+      const aiSettings = allSettings.ai;
+      console.log('=== AI配置检查 ===');
+      console.log('完整设置对象:', JSON.stringify(allSettings, null, 2));
+      console.log('AI设置:', JSON.stringify(aiSettings, null, 2));
+      console.log('baseUrl存在:', !!aiSettings?.baseUrl);
+      console.log('baseUrl值:', aiSettings?.baseUrl);
+      console.log('apiKey存在:', !!aiSettings?.apiKey);
+      console.log('apiKey值长度:', aiSettings?.apiKey?.length || 0);
       
-      // 如果只有一个知识库，在对话框中会自动高亮显示
-      if (writableKnowledgeBases.length === 1) {
-        console.log(`确认选择唯一的可写知识库: ${targetKnowledgeBase.name}`);
-      }
-
-      console.log(`开始调用FastGPT API导入内容到知识库: ${targetKnowledgeBase.name} (ID: ${targetKnowledgeBase.id})`);
-      console.log(`导入内容预览: ${content.substring(0, 100)}...`);
-      
-      const result = await this.fastgptClient.importContent({
-        content,
-        type: contentType as any,
-        source,
-        metadata: {
-          source: source as any,
-          type: contentType as any,
-          timestamp: Date.now(),
-          size: content.length
-        },
-        knowledgeBaseId: targetKnowledgeBase.id
-      });
-
-      console.log('导入结果:', result);
-
-      // 保存到历史记录
-      console.log('开始保存历史记录...');
-      const historyItem = {
-        id: Date.now().toString(),
-        content,
-        type: contentType as any,
-        source: source as any,
-        timestamp: Date.now(),
-        metadata: {
-          source: source as any,
-          type: contentType as any,
-          timestamp: Date.now(),
-          size: content.length,
-          knowledgeBaseName: targetKnowledgeBase.name
-        },
-        result
-      };
-      console.log('历史记录项:', historyItem);
-      await this.historyManager.addItem(historyItem);
-      console.log('历史记录保存成功');
-      
-      // 验证历史记录是否保存成功
-      const savedHistory = this.historyManager.getHistory();
-      console.log(`当前历史记录总数: ${savedHistory.length}`);
-      if (savedHistory.length > 0) {
-        console.log('最新历史记录:', savedHistory[0]);
-      }
-
-      // 显示通知 - 检查用户设置
-      if (appSettings.general.enableNotifications) {
-        this.windowManager.showNotification(
-          result.success ? '导入成功' : '导入失败',
-          result.success 
-            ? `已导入到知识库: ${targetKnowledgeBase.name}` 
-            : (result.message || result.error || '')
-        );
+      if (!aiSettings || !aiSettings.baseUrl || !aiSettings.apiKey) {
+        console.log('AI配置不完整，跳过AI智能匹配');
+        console.log('缺失项目:', {
+          aiSettings: !aiSettings,
+          baseUrl: !aiSettings?.baseUrl,
+          apiKey: !aiSettings?.apiKey
+        });
+        
+        // 显示AI配置不完整的通知
+        const settings = this.settingsManager.getSettings();
+        if (settings.general.enableNotifications) {
+          this.windowManager.showNotification(
+            'AI配置未完成',
+            '请在设置中配置AI模型信息以启用智能匹配功能，现在将使用手动选择模式'
+          );
+        }
+        
+        // 直接进入手动选择
+        targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
+        if (!targetKnowledgeBase) {
+          console.log('用户取消了知识库选择');
+          throw new Error('用户取消了知识库选择');
+        }
+        return await this.performImport(content, source, targetKnowledgeBase, 'manual', null);
       }
       
-      // 返回导入结果
-      return {
-        success: result.success,
-        message: result.success ? `已导入到知识库: ${targetKnowledgeBase.name}` : (result.message || result.error || '导入失败')
-      };
+      try {
+        console.log('开始AI智能匹配知识库...');
+        matchResult = await this.aiMatcher.matchKnowledgeBase(content, writableKnowledgeBases);
+        console.log('AI匹配结果:', matchResult);
+        
+        if (matchResult.success && matchResult.recommendations && matchResult.recommendations.length > 0) {
+          // 分析高置信度推荐
+          const highConfidenceRecs = matchResult.recommendations.filter(rec => rec.confidence >= 70);
+          console.log(`AI推荐结果: 总数=${matchResult.recommendations.length}, 高置信度(>=70%)=${highConfidenceRecs.length}`);
+          
+          if (highConfidenceRecs.length === 0) {
+            // 没有高置信度推荐，直接进入手动选择
+            console.log('所有AI推荐的置信度均低于70%，跳过推荐对话框，直接进入手动选择');
+            
+            // 显示置信度不足的通知
+            const settings = this.settingsManager.getSettings();
+            if (settings.general.enableNotifications) {
+              this.windowManager.showNotification(
+                'AI推荐置信度不足',
+                '所有推荐的置信度均低于70%，请手动选择知识库'
+              );
+            }
+            
+            // 直接进入手动选择
+            targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
+            if (!targetKnowledgeBase) {
+              console.log('用户取消了知识库选择');
+              throw new Error('用户取消了知识库选择');
+            }
+            return await this.performImport(content, source, targetKnowledgeBase, 'manual', null);
+          } else if (highConfidenceRecs.length === 1) {
+            // 只有一个高置信度推荐，自动导入
+            const finalChoice = highConfidenceRecs[0];
+            targetKnowledgeBase = writableKnowledgeBases.find(kb => kb.name === finalChoice.knowledgeBase);
+            if (!targetKnowledgeBase) {
+              console.log(`AI推荐的知识库 "${finalChoice.knowledgeBase}" 未找到，回退到手动选择`);
+              throw new Error('AI推荐的知识库未找到');
+            }
+            console.log(`✓ 单个高置信度推荐 ${finalChoice.confidence}%，自动导入到: ${targetKnowledgeBase.name}`);
+            return await this.performImport(content, source, targetKnowledgeBase, 'ai-auto', matchResult);
+          } else {
+            // 多个高置信度推荐，显示对话框让用户选择
+            console.log(`多个高置信度推荐(${highConfidenceRecs.length}个)，需要用户选择`);
+            const result = await this.showAIRecommendationDialog(matchResult, writableKnowledgeBases);
+            if (!result) {
+              console.log('用户取消了知识库选择');
+              throw new Error('用户取消了知识库选择');
+            }
+            if (result.action === 'import') {
+              return await this.performImport(content, source, result.knowledgeBase, 'ai-manual', matchResult);
+            } else {
+              return await this.performBatchImport(content, source, result.knowledgeBases, matchResult);
+            }
+          }
+        } else {
+          console.log('AI匹配失败，回退到手动选择');
+          throw new Error('AI匹配失败');
+        }
+      } catch (aiError: any) {
+        console.warn('AI匹配过程出错，回退到手动选择:', aiError);
+        
+        // 显示AI分析失败的通知
+        const settings = this.settingsManager.getSettings();
+        if (settings.general.enableNotifications) {
+          let errorMessage = 'AI智能分析失败，将使用手动选择模式';
+          
+          // 根据错误类型提供更具体的提示
+          if (aiError.message && aiError.message.includes('AI配置不完整')) {
+            errorMessage = 'AI配置不完整，请在设置中配置AI模型信息';
+          } else if (aiError.message && aiError.message.includes('连接失败')) {
+            errorMessage = 'AI服务连接失败，请检查网络和配置';
+          } else if (aiError.message && aiError.message.includes('认证失败')) {
+            errorMessage = 'AI服务认证失败，请检查API密钥';
+          }
+          
+          this.windowManager.showNotification(
+            'AI分析失败',
+            errorMessage
+          );
+        }
+        
+        // AI匹配失败，回退到手动选择
+        targetKnowledgeBase = await this.showKnowledgeBaseSelection(writableKnowledgeBases);
+        if (!targetKnowledgeBase) {
+          console.log('用户取消了知识库选择');
+          throw new Error('用户取消了知识库选择');
+        }
+        return await this.performImport(content, source, targetKnowledgeBase, 'manual', null);
+      }
     } catch (error: any) {
       console.error('导入内容失败:', error);
       
@@ -965,6 +1243,189 @@ class DiaFastGPTApp {
       }
     });
 
+    // 测试AI连接
+    ipcMain.handle(IPCChannel.TEST_AI_CONNECTION, async (_, config) => {
+      try {
+        // 如果传入了config参数，使用传入的配置；否则使用设置中的配置
+        let aiConfig = config;
+        if (!aiConfig) {
+          const settings = this.settingsManager.getSettings();
+          aiConfig = settings.ai;
+        }
+        
+        if (!aiConfig || !aiConfig.baseUrl || !aiConfig.apiKey) {
+          return {
+            success: false,
+            message: '请先填写 AI 模型配置信息（API地址和密钥）'
+          };
+        }
+
+        console.log('开始AI连接测试...');
+        console.log('测试配置:', {
+          baseUrl: aiConfig.baseUrl,
+          model: aiConfig.model,
+          hasApiKey: !!aiConfig.apiKey,
+          timeout: aiConfig.timeout
+        });
+
+        // 构建测试端点
+        let testEndpoint = aiConfig.baseUrl;
+        if (!testEndpoint.endsWith('/')) {
+          testEndpoint += '/';
+        }
+        
+        // 尝试不同的端点路径
+        const endpointsToTry = [
+          `${testEndpoint}v1/models`,
+          `${testEndpoint}models`,
+          `${testEndpoint}v1/chat/completions`
+        ];
+
+        let lastError: any = null;
+        let responseDetails: any = null;
+
+        for (const endpoint of endpointsToTry) {
+          try {
+            console.log(`尝试连接端点: ${endpoint}`);
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), aiConfig.timeout || 30000);
+            
+            const response = await fetch(endpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${aiConfig.apiKey}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'FlashBase/1.0'
+              },
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            console.log(`端点 ${endpoint} 响应状态: ${response.status}`);
+            console.log('响应头:', Object.fromEntries(response.headers.entries()));
+            
+            responseDetails = {
+              status: response.status,
+              statusText: response.statusText,
+              headers: Object.fromEntries(response.headers.entries()),
+              endpoint: endpoint
+            };
+
+            if (response.ok) {
+              try {
+                const data = await response.json();
+                console.log('连接成功，响应数据:', data);
+                return { 
+                  success: true, 
+                  message: `AI 模型连接测试成功！\n端点: ${endpoint}\n状态: ${response.status}`,
+                  models: data.data?.map((model: any) => model.id) || [],
+                  endpoint: endpoint
+                };
+              } catch (jsonError) {
+                console.log('JSON解析失败，但连接成功');
+                return {
+                  success: true,
+                  message: `AI 模型连接测试成功！\n端点: ${endpoint}\n状态: ${response.status}\n注意: 响应不是标准JSON格式`,
+                  endpoint: endpoint
+                };
+              }
+            } else {
+              // 尝试读取错误响应
+              let errorText = '';
+              try {
+                errorText = await response.text();
+                console.log('错误响应内容:', errorText.substring(0, 500));
+              } catch (e) {
+                console.log('无法读取错误响应');
+              }
+              
+              lastError = {
+                status: response.status,
+                statusText: response.statusText,
+                endpoint: endpoint,
+                responseText: errorText.substring(0, 200)
+              };
+              
+              // 如果是认证错误，不再尝试其他端点
+              if (response.status === 401 || response.status === 403) {
+                break;
+              }
+            }
+          } catch (fetchError: any) {
+            console.error(`端点 ${endpoint} 连接失败:`, fetchError);
+            lastError = {
+              endpoint: endpoint,
+              error: fetchError.message,
+              code: fetchError.code,
+              name: fetchError.name
+            };
+          }
+        }
+
+        // 所有端点都失败，分析错误原因
+        console.error('所有端点连接失败，最后错误:', lastError);
+        
+        let errorMessage = 'AI连接测试失败';
+        let diagnosticInfo = '';
+        
+        if (lastError) {
+          if (lastError.status === 401) {
+            errorMessage = 'API密钥认证失败';
+            diagnosticInfo = '请检查API密钥是否正确，是否有访问权限';
+          } else if (lastError.status === 403) {
+            errorMessage = 'API访问被拒绝';
+            diagnosticInfo = '请检查API密钥权限或账户余额';
+          } else if (lastError.status === 404) {
+            errorMessage = 'API端点不存在';
+            diagnosticInfo = `请检查API地址是否正确\n尝试的端点: ${endpointsToTry.join(', ')}`;
+          } else if (lastError.status >= 500) {
+            errorMessage = 'AI服务器内部错误';
+            diagnosticInfo = `服务器返回 ${lastError.status} 错误，请稍后重试`;
+          } else if (lastError.name === 'AbortError') {
+            errorMessage = '连接超时';
+            diagnosticInfo = `请检查网络连接或增加超时时间（当前: ${aiConfig.timeout || 30000}ms）`;
+          } else if (lastError.code === 'ECONNREFUSED') {
+            errorMessage = '连接被拒绝';
+            diagnosticInfo = '请检查API地址是否正确，服务是否正在运行';
+          } else if (lastError.code === 'ENOTFOUND') {
+            errorMessage = '域名解析失败';
+            diagnosticInfo = '请检查API地址是否正确，网络连接是否正常';
+          } else if (lastError.code === 'ECONNRESET') {
+            errorMessage = '连接被重置';
+            diagnosticInfo = '网络连接不稳定，请检查网络环境';
+          } else if (lastError.responseText && lastError.responseText.includes('<html')) {
+            errorMessage = 'API返回HTML页面';
+            diagnosticInfo = 'API地址可能指向了网页而不是API接口，请检查地址是否正确';
+          }
+        }
+        
+        const fullMessage = diagnosticInfo ? `${errorMessage}\n\n诊断信息:\n${diagnosticInfo}` : errorMessage;
+        
+        return { 
+          success: false, 
+          message: fullMessage,
+          diagnostics: {
+            testedEndpoints: endpointsToTry,
+            lastError: lastError,
+            responseDetails: responseDetails,
+            config: {
+              baseUrl: aiConfig.baseUrl,
+              hasApiKey: !!aiConfig.apiKey,
+              timeout: aiConfig.timeout
+            }
+          }
+        };
+      } catch (error: any) {
+        console.error('AI连接测试异常:', error);
+        return { 
+          success: false, 
+          message: `连接测试异常: ${error.message || '未知错误'}\n\n请检查网络连接和配置信息`
+        };
+      }
+    });
+
     ipcMain.handle(IPCChannel.GET_KNOWLEDGE_BASES, async () => {
       return this.fastgptClient.getKnowledgeBases();
     });
@@ -1012,6 +1473,31 @@ class DiaFastGPTApp {
       }
     });
 
+    // AI 智能匹配
+    ipcMain.handle(IPCChannel.AI_MATCH_KNOWLEDGE_BASE, async (event, content: string) => {
+      try {
+        const knowledgeBases = await this.fastgptClient.getKnowledgeBases();
+        if (!knowledgeBases || knowledgeBases.length === 0) {
+          return {
+            success: false,
+            error: '无法获取知识库列表'
+          };
+        }
+
+        const matches = await this.aiMatcher.matchKnowledgeBase(content, knowledgeBases);
+        return {
+          success: true,
+          matches
+        };
+      } catch (error: any) {
+        console.error('AI匹配失败:', error);
+        return {
+          success: false,
+          error: error.message || 'AI匹配失败'
+        };
+      }
+    });
+
     // 设置管理相关
     ipcMain.handle(IPCChannel.GET_SETTINGS, async () => {
       return this.settingsManager.getSettings();
@@ -1021,9 +1507,13 @@ class DiaFastGPTApp {
       this.settingsManager.saveSettings(settings);
       // 重新配置 FastGPT 客户端
       this.fastgptClient.updateConfig(settings.fastgpt);
+      // 更新 AI 匹配器配置
+      this.aiMatcher.updateConfig(settings.ai);
       // 重新注册快捷键
       await this.registerGlobalShortcuts();
     });
+
+
 
     // 历史记录相关
     ipcMain.handle(IPCChannel.GET_HISTORY, async () => {

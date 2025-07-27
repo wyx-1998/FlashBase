@@ -1,6 +1,6 @@
 {
   "name": "flashbase",
-  "version": "1.1.2",
+  "version": "2.0.0",
   "description": "FlashBase - 智能剪贴板与知识库管理工具",
   "main": "dist/main/main/app.js",
   "homepage": "./",
