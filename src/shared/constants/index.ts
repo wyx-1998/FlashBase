@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 // 应用信息
 export const APP_INFO = {
   name: 'FlashBase',
-  version: '1.1.2',
+  version: '2.0.0',
   description: '快速导入内容到 FastGPT 知识库的桌面应用',
   homepage: 'https://github.com/wyx-1998/FlashBase'
 };

@@ -14,7 +14,7 @@
 - [发布说明](../RELEASE_NOTES.md) - v2.0.0版本发布说明
 
 ### 🔧 开发文档
-- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - 详细的开发指南，包含架构设计和开发规范
+- **[DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md)** - 完整的开发指南和快速开始
 - **[PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)** - 项目目录结构和文件组织方式
 - **[PROJECT_STATUS.md](./PROJECT_STATUS.md)** - 项目状态和进度跟踪
 - **[STARTUP_ENGINEERING.md](./STARTUP_ENGINEERING.md)** - 启动工程和技术架构说明
@@ -27,23 +27,17 @@
 ### 新手开发者
 1. 先阅读 [项目状态](PROJECT_STATUS.md) 了解项目现状和v2.0.0功能
 2. 查看 [项目结构](PROJECT_STRUCTURE.md) 理解代码组织
-3. 按照 [开发指南](DEVELOPMENT_GUIDE.md) 配置开发环境
-4. 参考 [开发文档](DEVELOPMENT.md) 开始编码
-5. 查看 [版本更新日志](../CHANGELOG.md) 了解最新变更
+3. 按照 [开发指南](DEVELOPMENT_GUIDE.md) 配置开发环境并开始编码
+4. 查看 [版本更新日志](../CHANGELOG.md) 了解最新变更
 
 ### 用户和测试者
 1. 查看 [发布说明](../RELEASE_NOTES.md) 了解v2.0.0新功能
 2. 下载最新的 [GitHub Releases](https://github.com/wyx-1998/FlashBase/releases) 安装包
 3. 参考主项目 [README](../README.md) 了解使用方法
 
-### 开发者
-1. 阅读 [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) 快速上手开发
-2. 详细开发规范请参考 [DEVELOPMENT.md](./DEVELOPMENT.md)
-3. 了解项目状态请查看 [PROJECT_STATUS.md](./PROJECT_STATUS.md)
-
 ### 贡献者
 1. 查看 [../README.md](../README.md) 中的贡献指南
-2. 遵循 [DEVELOPMENT.md](./DEVELOPMENT.md) 中的开发规范
+2. 遵循 [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) 中的开发规范
 3. 提交前请确保通过所有测试
 
 ## 📝 文档维护
